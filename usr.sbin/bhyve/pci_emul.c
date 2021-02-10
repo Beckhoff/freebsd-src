@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 
 #include <ctype.h>
 #include <errno.h>
+#include <err.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -615,7 +616,11 @@ int
 pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
     uint64_t size)
 {
-	assert(idx >= 0 && idx <= PCI_BARMAX);
+	if ((type != PCIBAR_ROM) && (idx < 0 || idx > PCI_BARMAX)) {
+		errx(4, "Illegal BAR idx");
+	} else if ((type == PCIBAR_ROM) && (idx != PCI_ROM_IDX)) {
+		errx(4, "Illegal ROM idx");
+	}
 
 	if ((size & (size - 1)) != 0)
 		size = 1UL << flsl(size);	/* round up to a power of 2 */
@@ -624,6 +629,9 @@ pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
 	if (type == PCIBAR_IO) {
 		if (size < 4)
 			size = 4;
+	} else if (type == PCIBAR_ROM) {
+		if (size < ~PCIM_BIOS_ADDR_MASK + 1)
+			size = ~PCIM_BIOS_ADDR_MASK + 1;
 	} else {
 		if (size < 16)
 			size = 16;
@@ -713,6 +721,14 @@ pci_emul_assign_bar(const struct pci_bar_allocation *const pci_bar)
 		lobits = PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_32;
 		enbit = PCIM_CMD_MEMEN;
 		break;
+	case PCIBAR_ROM:
+		/* do not claim memory for ROM. OVMF will do it for us. */
+		baseptr = NULL;
+		limit = 0;
+		mask = PCIM_BIOS_ADDR_MASK;
+		lobits = 0;
+		enbit = PCIM_CMD_MEMEN;
+		break;
 	default:
 		printf("pci_emul_alloc_base: invalid bar type %d\n", type);
 		assert(0);
@@ -748,7 +764,9 @@ pci_emul_assign_bar(const struct pci_bar_allocation *const pci_bar)
 	cmd = pci_get_cfgdata16(pdi, PCIR_COMMAND);
 	if ((cmd & enbit) != enbit)
 		pci_set_cfgdata16(pdi, PCIR_COMMAND, cmd | enbit);
-	register_bar(pdi, idx);
+	if (type != PCIBAR_ROM) {
+		register_bar(pdi, idx);
+	}
 
 	return (0);
 }
