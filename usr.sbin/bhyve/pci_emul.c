@@ -542,6 +542,13 @@ register_bar(struct pci_devinst *pi, int idx)
 	modify_bar_registration(pi, idx, 1);
 }
 
+/* Is the ROM enabled for the emulated pci device? */
+static int
+romen(struct pci_devinst *pi)
+{
+	return (pi->pi_bar[PCI_ROM_IDX].lobits & PCIM_BIOS_ENABLE) == PCIM_BIOS_ENABLE;
+}
+
 /* Are we decoding i/o port accesses for the emulated pci device? */
 static int
 porten(struct pci_devinst *pi)
@@ -1927,7 +1934,11 @@ pci_cfgrw(struct vmctx *ctx, int vcpu, int in, int bus, int slot, int func,
 			 */
 			if (bytes != 4 || (coff & 0x3) != 0)
 				return;
-			idx = (coff - PCIR_BAR(0)) / 4;
+			if (coff != PCIR_BIOS) {
+				idx = (coff - PCIR_BAR(0)) / 4;
+			} else {
+				idx = PCI_ROM_IDX;
+			}
 			mask = ~(pi->pi_bar[idx].size - 1);
 			switch (pi->pi_bar[idx].type) {
 			case PCIBAR_NONE:
@@ -1969,6 +1980,20 @@ pci_cfgrw(struct vmctx *ctx, int vcpu, int in, int bus, int slot, int func,
 					update_bar_address(pi, addr, idx - 1,
 							   PCIBAR_MEMHI64);
 				}
+				break;
+			case PCIBAR_ROM:
+				addr = bar = *eax & mask;
+				if (memen(pi) && romen(pi)) {
+					unregister_bar(pi, idx);
+				}
+				pi->pi_bar[idx].addr = addr;
+				pi->pi_bar[idx].lobits = *eax &
+				    PCIM_BIOS_ENABLE;
+				/* romen could have changed it value */
+				if (memen(pi) && romen(pi)) {
+					register_bar(pi, idx);
+				}
+				bar |= pi->pi_bar[idx].lobits;
 				break;
 			default:
 				assert(0);
