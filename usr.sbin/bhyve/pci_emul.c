@@ -515,6 +515,12 @@ modify_bar_registration(struct pci_devinst *pi, int idx, int registration)
 			(*pe->pe_baraddr)(pi->pi_vmctx, pi, idx, registration,
 					  pi->pi_bar[idx].addr);
 		break;
+	case PCIBAR_ROM:
+		error = 0;
+		if (pe->pe_baraddr != NULL)
+			(*pe->pe_baraddr)(pi->pi_vmctx, pi, idx, registration,
+			    pi->pi_bar[idx].addr);
+		break;
 	default:
 		error = EINVAL;
 		break;
