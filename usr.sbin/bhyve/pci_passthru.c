@@ -1104,13 +1104,20 @@ static void
 passthru_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 	      int enabled, uint64_t address)
 {
-
-	if (pi->pi_bar[baridx].type == PCIBAR_IO)
-		return;
-	if (baridx == pci_msix_table_bar(pi))
-		passthru_msix_addr(ctx, pi, baridx, enabled, address);
-	else
-		passthru_mmio_addr(ctx, pi, baridx, enabled, address);
+	switch (pi->pi_bar[baridx].type) {
+	case PCIBAR_IO:
+		/* IO BARs are emulated */
+		break;
+	case PCIBAR_MEM32:
+	case PCIBAR_MEM64:
+		if (baridx == pci_msix_table_bar(pi))
+			passthru_msix_addr(ctx, pi, baridx, enabled, address);
+		else
+			passthru_mmio_addr(ctx, pi, baridx, enabled, address);
+		break;
+	default:
+		errx(4, "%s: invalid BAR type %d", __func__, pi->pi_bar[baridx].type);
+	}
 }
 
 struct pci_devemu passthru = {
