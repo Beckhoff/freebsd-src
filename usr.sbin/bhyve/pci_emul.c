@@ -1930,9 +1930,10 @@ pci_cfgrw(struct vmctx *ctx, int vcpu, int in, int bus, int slot, int func,
 			return;
 
 		/*
-		 * Special handling for write to BAR registers
+		 * Special handling for write to BAR and ROM registers
 		 */
-		if (coff >= PCIR_BAR(0) && coff < PCIR_BAR(PCI_BARMAX + 1)) {
+		if ((coff >= PCIR_BAR(0) && coff <= PCIR_BAR(PCI_BARMAX)) ||
+		    (coff >= PCIR_BIOS && coff < PCIR_BIOS + 4)) {
 			/*
 			 * Ignore writes to BAR registers that are not
 			 * 4-byte aligned.
