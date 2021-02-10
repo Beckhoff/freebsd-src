@@ -30,7 +30,8 @@ typedef int (*cfgwrite_handler)(struct vmctx *const ctx, const int vcpu,
 
 struct passthru_softc {
 	struct pci_devinst *psc_pi;
-	struct pcibar psc_bar[PCI_BARMAX + 1];
+	/* ROM is handled like a BAR */
+	struct pcibar psc_bar[PCI_BARMAX_WITH_ROM + 1];
 	struct {
 		int capoff;
 		int msgctrl;
