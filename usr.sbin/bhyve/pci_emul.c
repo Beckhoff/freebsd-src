@@ -1791,7 +1791,7 @@ pci_emul_cmd_changed(struct pci_devinst *pi, uint16_t old)
 	 * If the MMIO or I/O address space decoding has changed then
 	 * register/unregister all BARs that decode that address space.
 	 */
-	for (i = 0; i <= PCI_BARMAX; i++) {
+	for (i = 0; i <= PCI_BARMAX_WITH_ROM; i++) {
 		switch (pi->pi_bar[i].type) {
 			case PCIBAR_NONE:
 			case PCIBAR_MEMHI64:
@@ -1805,6 +1805,11 @@ pci_emul_cmd_changed(struct pci_devinst *pi, uint16_t old)
 						unregister_bar(pi, i);
 				}
 				break;
+			case PCIBAR_ROM:
+				/* skip (un-)register of ROM if it disabled */
+				if (!romen(pi))
+					break;
+				/* fallthrough */
 			case PCIBAR_MEM32:
 			case PCIBAR_MEM64:
 				/* MMIO address space decoding changed? */
