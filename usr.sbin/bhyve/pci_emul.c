@@ -107,6 +107,16 @@ static uint64_t pci_emul_membase32;
 static uint64_t pci_emul_membase64;
 static uint64_t pci_emul_memlim64;
 
+struct pci_bar_allocation {
+	TAILQ_ENTRY(pci_bar_allocation) pci_bar_chain;
+	struct pci_devinst *pdi;
+	int idx;
+	enum pcibar_type type;
+	uint64_t size;
+};
+TAILQ_HEAD(pci_bar_list, pci_bar_allocation) pci_bars = TAILQ_HEAD_INITIALIZER(
+    pci_bars);
+
 #define	PCI_EMUL_IOBASE		0x2000
 #define	PCI_EMUL_IOLIMIT	0x10000
 
@@ -592,10 +602,6 @@ int
 pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
     uint64_t size)
 {
-	int error;
-	uint64_t *baseptr, limit, addr, mask, lobits, bar;
-	uint16_t cmd, enbit;
-
 	assert(idx >= 0 && idx <= PCI_BARMAX);
 
 	if ((size & (size - 1)) != 0)
@@ -609,6 +615,45 @@ pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
 		if (size < 16)
 			size = 16;
 	}
+
+	/* allocate new bar */
+	struct pci_bar_allocation *const new_bar = malloc(
+	    sizeof(struct pci_bar_allocation));
+	memset(new_bar, 0, sizeof(struct pci_bar_allocation));
+	new_bar->pdi = pdi;
+	new_bar->idx = idx;
+	new_bar->type = type;
+	new_bar->size = size;
+
+	/* get bar position */
+	struct pci_bar_allocation *bar = NULL;
+	TAILQ_FOREACH (bar, &pci_bars, pci_bar_chain) {
+		if (bar->size < size) {
+			break;
+		}
+	}
+
+	/* insert bar into queue */
+	if (bar == NULL) {
+		TAILQ_INSERT_TAIL(&pci_bars, new_bar, pci_bar_chain);
+	} else {
+		TAILQ_INSERT_BEFORE(bar, new_bar, pci_bar_chain);
+	}
+
+	return (0);
+}
+
+static int
+pci_emul_assign_bar(const struct pci_bar_allocation *const pci_bar)
+{
+	struct pci_devinst *const pdi = pci_bar->pdi;
+	const int idx = pci_bar->idx;
+	enum pcibar_type type = pci_bar->type;
+	const uint64_t size = pci_bar->size;
+
+	int error;
+	uint64_t *baseptr, limit, addr, mask, lobits, bar;
+	uint16_t cmd, enbit;
 
 	switch (type) {
 	case PCIBAR_NONE:
@@ -1121,6 +1166,7 @@ init_pci(struct vmctx *ctx)
 		bi->membase32 = pci_emul_membase32;
 		bi->membase64 = pci_emul_membase64;
 
+		/* first run: init devices */
 		for (slot = 0; slot < MAXSLOTS; slot++) {
 			si = &bi->slotinfo[slot];
 			for (func = 0; func < MAXFUNCS; func++) {
@@ -1134,6 +1180,18 @@ init_pci(struct vmctx *ctx)
 				if (error)
 					return (error);
 			}
+		}
+
+		/* second run: assign BARs */
+		struct pci_bar_allocation *bar;
+		TAILQ_FOREACH (bar, &pci_bars, pci_bar_chain) {
+			pci_emul_assign_bar(bar);
+		}
+		/* free BARs */
+		while (!TAILQ_EMPTY(&pci_bars)) {
+			bar = TAILQ_FIRST(&pci_bars);
+			TAILQ_REMOVE(&pci_bars, bar, pci_bar_chain);
+			free(bar);
 		}
 
 		/*
