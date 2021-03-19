@@ -72,6 +72,8 @@ __FBSDID("$FreeBSD$");
 #define MAXSLOTS	(PCI_SLOTMAX + 1)
 #define	MAXFUNCS	(PCI_FUNCMAX + 1)
 
+#define GB (1024 * 1024 * 1024UL)
+
 struct funcinfo {
 	char	*fi_name;
 	char	*fi_param;
@@ -113,6 +115,7 @@ static uint64_t pci_emul_memlim64;
 SYSRES_MEM(PCI_EMUL_ECFG_BASE, PCI_EMUL_ECFG_SIZE);
 
 #define	PCI_EMUL_MEMLIMIT32	PCI_EMUL_ECFG_BASE
+#define PCI_EMUL_MEMSIZE64 (32 * GB)
 
 static struct pci_devemu *pci_emul_finddev(char *name);
 static void pci_lintr_route(struct pci_devinst *pi);
@@ -1098,25 +1101,14 @@ init_pci(struct vmctx *ctx)
 	struct slotinfo *si;
 	struct funcinfo *fi;
 	size_t lowmem;
-	uint64_t cpu_maxphysaddr, pci_emul_memresv64;
-	u_int regs[4];
 	int bus, slot, func, error;
 
 	pci_emul_iobase = PCI_EMUL_IOBASE;
 	pci_emul_membase32 = vm_get_lowmem_limit(ctx);
 
-	do_cpuid(0x80000008, regs);
-	cpu_maxphysaddr = 1ULL << (regs[0] & 0xff);
-	if (cpu_maxphysaddr > VM_MAXUSER_ADDRESS_LA48)
-		cpu_maxphysaddr = VM_MAXUSER_ADDRESS_LA48;
-	pci_emul_memresv64 = cpu_maxphysaddr / 4;
-	/*
-	 * Max power of 2 that is less then
-	 * cpu_maxphysaddr - pci_emul_memresv64.
-	 */
-	pci_emul_membase64 = 1ULL << (flsl(cpu_maxphysaddr -
-	    pci_emul_memresv64) - 1);
-	pci_emul_memlim64 = cpu_maxphysaddr;
+	pci_emul_membase64 = 4 * GB + vm_get_highmem_size(ctx);
+	pci_emul_membase64 = roundup2(pci_emul_membase64, PCI_EMUL_MEMSIZE64);
+	pci_emul_memlim64 = pci_emul_membase64 + PCI_EMUL_MEMSIZE64;
 
 	for (bus = 0; bus < MAXBUSES; bus++) {
 		if ((bi = pci_businfo[bus]) == NULL)
