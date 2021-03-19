@@ -641,6 +641,46 @@ set_pcir_handler(struct passthru_softc *const sc, const uint32_t reg,
 }
 
 static int
+passthru_init_quirks(struct vmctx *const ctx, struct pci_devinst *const pi,
+    const char *const opts)
+{
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	const uint16_t vendor = read_config(&sc->psc_sel, PCIR_VENDOR, 0x02);
+	const uint8_t class = read_config(&sc->psc_sel, PCIR_CLASS, 0x01);
+
+	/* currently only display devices have quirks */
+	if (class != PCIC_DISPLAY)
+		return (0);
+
+	if (vendor == PCI_VENDOR_INTEL)
+		return gvt_d_init(ctx, pi, opts);
+
+	return (0);
+}
+
+static void
+passthru_deinit_quirks(struct vmctx *const ctx, struct pci_devinst *const pi)
+{
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	if (sc == NULL)
+		return;
+
+	const uint16_t vendor = read_config(&sc->psc_sel, PCIR_VENDOR, 0x02);
+	const uint8_t class = read_config(&sc->psc_sel, PCIR_CLASS, 0x01);
+
+	/* currently only display devices have quirks */
+	if (class != PCIC_DISPLAY)
+		return;
+
+	if (vendor == PCI_VENDOR_INTEL)
+		return gvt_d_deinit(ctx, pi);
+
+	return;
+}
+
+static int
 passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
 	int bus, slot, func, error, memflags;
@@ -743,9 +783,13 @@ passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		 passthru_cfgread_default, passthru_cfgwrite_default)) != 0)
 		goto done;
 
+	if ((error = passthru_init_quirks(ctx, pi, opts)) != 0)
+		goto done;
+
 	error = 0; /* success */
 done:
 	if (error) {
+		passthru_deinit_quirks(ctx, pi);
 		free(sc);
 		vm_unassign_pptdev(ctx, bus, slot, func);
 	}
