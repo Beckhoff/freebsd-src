@@ -33,6 +33,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
+#include <sys/pciio.h>
 #include <machine/vmm.h>
 #include <machine/vmm_snapshot.h>
 
@@ -51,6 +52,7 @@ __FBSDID("$FreeBSD$");
 #include "pci_emul.h"
 #include "pci_irq.h"
 #include "pci_lpc.h"
+#include "pci_passthru.h"
 #include "pctestdev.h"
 #include "uart_emul.h"
 
@@ -480,6 +482,62 @@ pci_lpc_init(struct vmctx *ctx, struct pci_devinst *pi, nvlist_t *nvl)
 	pci_set_cfgdata16(pi, PCIR_VENDOR, LPC_VENDOR);
 	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_BRIDGE);
 	pci_set_cfgdata8(pi, PCIR_SUBCLASS, PCIS_BRIDGE_ISA);
+
+	char value[16];
+
+	/* on Intel systems lpc is always connected to 0:1f.0 */
+	const struct pcisel sel = { .pc_dev = 0x1f };
+	if ((read_config(&sel, PCIR_VENDOR, 2) == PCI_VENDOR_INTEL) &&
+	    (read_config(&sel, PCIR_CLASS, 1) == PCIC_BRIDGE) &&
+	    (read_config(&sel, PCIR_SUBCLASS, 1) == PCIS_BRIDGE_ISA)) {
+		/*
+		 * The VID, DID, REVID, SUBVID and SUBDID of lpc need to be
+		 * aligned with the physical ones. Without these physical
+		 * values, GPU passthrough of Intel integrated graphics devices
+		 * won't work properly. The Intel GOP driver checks these values
+		 * to proof that it runs on the correct platform.
+		 */
+		snprintf(value, sizeof(value), "0x%04x",
+		    read_config(&sel, PCIR_VENDOR, 2));
+		set_config_value_if_unset("lpc.pcir.vendor", value);
+		snprintf(value, sizeof(value), "0x%04x",
+		    read_config(&sel, PCIR_DEVICE, 2));
+		set_config_value_if_unset("lpc.pcir.device", value);
+		snprintf(value, sizeof(value), "0x%02x",
+		    read_config(&sel, PCIR_REVID, 1));
+		set_config_value_if_unset("lpc.pcir.revid", value);
+		snprintf(value, sizeof(value), "0x%04x",
+		    read_config(&sel, PCIR_SUBVEND_0, 2));
+		set_config_value_if_unset("lpc.pcir.subvendor", value);
+		snprintf(value, sizeof(value), "0x%04x",
+		    read_config(&sel, PCIR_SUBDEV_0, 2));
+		set_config_value_if_unset("lpc.pcir.subdevice", value);
+	}
+
+	snprintf(value, sizeof(value), "0x%04x", LPC_VENDOR);
+	set_config_value_if_unset("lpc.pcir.vendor", value);
+	snprintf(value, sizeof(value), "0x%04x", LPC_DEV);
+	set_config_value_if_unset("lpc.pcir.device", value);
+	snprintf(value, sizeof(value), "0x%02x", 0);
+	set_config_value_if_unset("lpc.pcir.revid", 0);
+	snprintf(value, sizeof(value), "0x%04x", 0);
+	set_config_value_if_unset("lpc.pcir.subvendor", 0);
+	snprintf(value, sizeof(value), "0x%04x", 0);
+	set_config_value_if_unset("lpc.pcir.subdevice", 0);
+
+	/* initialize config space */
+	pci_set_cfgdata16(pi, PCIR_VENDOR,
+	    strtol(get_config_value("lpc.pcir.vendor"), NULL, 16));
+	pci_set_cfgdata16(pi, PCIR_DEVICE,
+	    strtol(get_config_value("lpc.pcir.device"), NULL, 16));
+	pci_set_cfgdata8(pi, PCIR_CLASS, PCIC_BRIDGE);
+	pci_set_cfgdata8(pi, PCIR_SUBCLASS, PCIS_BRIDGE_ISA);
+	pci_set_cfgdata8(pi, PCIR_REVID,
+	    strtol(get_config_value("lpc.pcir.revid"), NULL, 16));
+	pci_set_cfgdata16(pi, PCIR_SUBVEND_0,
+	    strtol(get_config_value("lpc.pcir.subvendor"), NULL, 16));
+	pci_set_cfgdata16(pi, PCIR_SUBDEV_0,
+	    strtol(get_config_value("lpc.pcir.subdevice"), NULL, 16));
 
 	lpc_bridge = pi;
 

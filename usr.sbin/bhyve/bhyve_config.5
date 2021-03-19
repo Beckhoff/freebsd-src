@@ -131,6 +131,26 @@ will listen for connections on this port.
 .It Va gdb.wait Ta bool Ta false Ta
 If the debug server is enabled, wait for a debugger to connect
 before starting the guest.
+.It Va lpc.pcir.vendor Ta integer Ta 0x8086 Ta
+Vendor id of the LPC bridge as hex number.
+On Intel systems the LPC bridge uses the physical vendor id
+as default value.
+.It Va lpc.pcir.device Ta integer Ta 0x7000 Ta
+Device id of the LPC bridge as hex number.
+On Intel systems the LPC bridge uses the physical device id
+as default value.
+.It Va lpc.pcir.revid Ta integer Ta 0 Ta
+Revision id of the LPC bridge as hex number.
+On Intel systems the LPC bridge uses the physical revision id
+as default value.
+.It Va lpc.pcir.subvendor Ta integer Ta 0 Ta
+Subvendor id of the LPC bridge as hex number.
+On Intel systems the LPC bridge uses the physical subvendor id
+as default value.
+.It Va lpc.pcir.subdevice Ta integer Ta 0 Ta
+Subdevice id of the LPC bridge as hex number.
+On Intel systems the LPC bridge uses the physical subdevice id
+as default value.
 .It Va rtc.use_localtime Ta bool Ta true Ta
 The real time clock uses the local time of the host.
 If this is set to false, the real time clock uses UTC.
