@@ -633,6 +633,22 @@ done:
 	return (error);
 }
 
+int
+set_pcir_handler(struct passthru_softc *const sc, const uint32_t reg,
+    const uint32_t len, const cfgread_handler rhandler,
+    const cfgwrite_handler whandler)
+{
+	if (reg > PCI_REGMAX || reg + len > PCI_REGMAX + 1)
+		return (-1);
+
+	for (uint32_t i = reg; i < reg + len; ++i) {
+		sc->psc_pcir_rhandler[i] = rhandler;
+		sc->psc_pcir_whandler[i] = whandler;
+	}
+
+	return 0;
+}
+
 static int
 passthru_legacy_config(nvlist_t *nvl, const char *opts)
 {
@@ -766,6 +782,11 @@ passthru_init(struct vmctx *ctx, struct pci_devinst *pi, nvlist_t *nvl)
             get_config_value_node(nvl, "rom"))) != 0)
 		goto done;
 
+	/* set default handler for all PCI registers */
+	if ((error = set_pcir_handler(sc, 0, PCI_REGMAX + 1,
+		 passthru_cfgread_default, passthru_cfgwrite_default)) != 0)
+		goto done;
+
 	error = 0;		/* success */
 done:
 	if (error) {
@@ -815,6 +836,16 @@ static int
 passthru_cfgread(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 		 int coff, int bytes, uint32_t *rv)
 {
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	return sc->psc_pcir_rhandler[coff](ctx, vcpu, pi, coff, bytes, rv);
+}
+
+int
+passthru_cfgread_default(struct vmctx *const ctx, const int vcpu,
+    struct pci_devinst *const pi, const int coff, const int bytes,
+    uint32_t *const rv)
+{
 	struct passthru_softc *sc;
 
 	sc = pi->pi_arg;
@@ -856,9 +887,27 @@ passthru_cfgread(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 	return (0);
 }
 
+int
+passthru_cfgread_emulate(struct vmctx *const ctx, const int vcpu,
+    struct pci_devinst *const pi, const int coff, const int bytes,
+    uint32_t *const rv)
+{
+	return (-1);
+}
+
 static int
 passthru_cfgwrite(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 		  int coff, int bytes, uint32_t val)
+{
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	return sc->psc_pcir_whandler[coff](ctx, vcpu, pi, coff, bytes, val);
+}
+
+int
+passthru_cfgwrite_default(struct vmctx *const ctx, const int vcpu,
+    struct pci_devinst *const pi, const int coff, const int bytes,
+    const uint32_t val)
 {
 	int error, msix_table_entries, i;
 	struct passthru_softc *sc;
@@ -912,6 +961,7 @@ passthru_cfgwrite(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 		return (0);
 	}
 
+	uint32_t write_val = val;
 #ifdef LEGACY_SUPPORT
 	/*
 	 * If this device does not support MSI natively then we cannot let
@@ -920,21 +970,29 @@ passthru_cfgwrite(struct vmctx *ctx, int vcpu, struct pci_devinst *pi,
 	 */
 	if (sc->psc_msi.emulated && pci_msi_enabled(pi)) {
 		if (coff == PCIR_COMMAND && bytes == 2)
-			val &= ~PCIM_CMD_INTxDIS;
+			write_val &= ~PCIM_CMD_INTxDIS;
 	}
 #endif
 
-	write_config(&sc->psc_sel, coff, bytes, val);
+	write_config(&sc->psc_sel, coff, bytes, write_val);
 	if (coff == PCIR_COMMAND) {
 		cmd_old = pci_get_cfgdata16(pi, PCIR_COMMAND);
 		if (bytes == 1)
-			pci_set_cfgdata8(pi, PCIR_COMMAND, val);
+			pci_set_cfgdata8(pi, PCIR_COMMAND, write_val);
 		else if (bytes == 2)
-			pci_set_cfgdata16(pi, PCIR_COMMAND, val);
+			pci_set_cfgdata16(pi, PCIR_COMMAND, write_val);
 		pci_emul_cmd_changed(pi, cmd_old);
 	}
 
 	return (0);
+}
+
+int
+passthru_cfgwrite_emulate(struct vmctx *const ctx, const int vcpu,
+    struct pci_devinst *const pi, const int coff, const int bytes,
+    const uint32_t val)
+{
+	return (-1);
 }
 
 static void
