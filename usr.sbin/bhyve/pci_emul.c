@@ -681,14 +681,18 @@ pci_emul_assign_bar(const struct pci_bar_allocation *const pci_bar)
 			mask = PCIM_BAR_MEM_BASE;
 			lobits = PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_64 |
 				 PCIM_BAR_MEM_PREFETCH;
-		} else {
-			baseptr = &pci_emul_membase32;
-			limit = PCI_EMUL_MEMLIMIT32;
-			mask = PCIM_BAR_MEM_BASE;
-			lobits = PCIM_BAR_MEM_SPACE | PCIM_BAR_MEM_64;
+			enbit = PCIM_CMD_MEMEN;
+			break;
 		}
-		enbit = PCIM_CMD_MEMEN;
-		break;
+		/*
+		 * Use 32 bit BARs for small requests:
+		 * Fallthrough into MEM32 case
+		 */
+		type = PCIBAR_MEM32;
+		pdi->pi_bar[idx + 1].type = PCIBAR_NONE;
+		/* clear 64-bit flag */
+		pdi->pi_bar[idx].lobits &= ~PCIM_BAR_MEM_64;
+		/* [fallthrough] */
 	case PCIBAR_MEM32:
 		baseptr = &pci_emul_membase32;
 		limit = PCI_EMUL_MEMLIMIT32;
