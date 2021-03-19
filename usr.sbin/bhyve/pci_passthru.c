@@ -79,21 +79,6 @@ __FBSDID("$FreeBSD$");
 
 static int pcifd = -1;
 
-struct passthru_softc {
-	struct pci_devinst *psc_pi;
-	/* ROM is handled like a BAR */
-	struct pcibar psc_bar[PCI_BARMAX_WITH_ROM + 1];
-	struct {
-		int		capoff;
-		int		msgctrl;
-		int		emulated;
-	} psc_msi;
-	struct {
-		int		capoff;
-	} psc_msix;
-	struct pcisel psc_sel;
-};
-
 static int
 msi_caplen(int msgctrl)
 {
