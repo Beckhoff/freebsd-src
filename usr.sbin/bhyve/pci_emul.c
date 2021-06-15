@@ -33,6 +33,8 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/linker_set.h>
+#include <sys/mman.h>
+
 #include <vm/vm.h>
 #include <vm/vm_param.h>
 #include <vm/pmap.h>
@@ -104,6 +106,9 @@ static struct businfo *pci_businfo[MAXBUSES];
 SET_DECLARE(pci_devemu_set, struct pci_devemu);
 
 static uint64_t pci_emul_iobase;
+static uint64_t pci_emul_rombase;
+static uint64_t pci_emul_romoffset;
+static uint64_t pci_emul_romlim;
 static uint64_t pci_emul_membase32;
 static uint64_t pci_emul_membase64;
 static uint64_t pci_emul_memlim64;
@@ -120,6 +125,8 @@ TAILQ_HEAD(pci_bar_list, pci_bar_allocation) pci_bars = TAILQ_HEAD_INITIALIZER(
 
 #define	PCI_EMUL_IOBASE		0x2000
 #define	PCI_EMUL_IOLIMIT	0x10000
+
+#define PCI_EMUL_ROMSIZE 0x10000000
 
 #define	PCI_EMUL_ECFG_BASE	0xE0000000		    /* 3.5GB */
 #define	PCI_EMUL_ECFG_SIZE	(MAXBUSES * 1024 * 1024)    /* 1MB per bus */
@@ -660,6 +667,43 @@ pci_emul_alloc_bar(struct pci_devinst *pdi, int idx, enum pcibar_type type,
 	} else {
 		TAILQ_INSERT_BEFORE(bar, new_bar, pci_bar_chain);
 	}
+
+	return (0);
+}
+
+int
+pci_emul_alloc_rom(struct pci_devinst *const pdi, const uint64_t size, uint64_t *const addr)
+{
+	/* allocate ROM-Space once */
+	if (pci_emul_rombase == 0) {
+		pci_emul_rombase = (uint64_t)vm_create_devmem(pdi->pi_vmctx, VM_PCIROM,
+		    "pcirom", PCI_EMUL_ROMSIZE);
+		if ((void *)pci_emul_rombase == MAP_FAILED)
+			return -ENOMEM;
+		pci_emul_romlim = pci_emul_rombase + PCI_EMUL_ROMSIZE;
+		pci_emul_romoffset = 0;
+	}
+
+	/* round up to a power of 2 */
+	uint64_t rom_size = 1UL << flsl(size);
+	/* ROM size should be greater than 2 KB */
+	rom_size = MAX(rom_size, ~PCIM_BIOS_ADDR_MASK + 1);
+
+	/* check if ROM fits into ROM-Space */
+	if (pci_emul_romoffset + rom_size > PCI_EMUL_ROMSIZE)
+		return -E2BIG;
+
+	/* allocate ROM BAR */
+	const int error = pci_emul_alloc_bar(pdi, PCI_ROM_IDX, PCIBAR_ROM, rom_size);
+	if (error)
+		return error;
+
+	/* return address */
+	*addr = pci_emul_rombase + pci_emul_romoffset;
+	/* save offset into ROM Space */
+	pdi->pi_romoffset = pci_emul_romoffset;
+	/* increase offset for next ROM */
+	pci_emul_romoffset += rom_size;
 
 	return (0);
 }
