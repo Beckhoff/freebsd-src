@@ -680,6 +680,76 @@ passthru_deinit_quirks(struct vmctx *const ctx, struct pci_devinst *const pi)
 	return;
 }
 
+static void
+passthru_usage(const char *const opt)
+{
+	warnx("Invalid passthru option \"%s\"", opt);
+	warnx("passthru,<bus>/<dev>/<func>,{rom=rom_file}");
+}
+
+static int
+passthru_parse_opts(struct passthru_softc *const sc, const char *const opts)
+{
+	int error = 0;
+	char *const uopts = strdup(opts);
+	const char *xopt = strtok(uopts, ",");
+	for (xopt = strtok(NULL, ","); xopt != NULL; xopt = strtok(NULL, ",")) {
+		char *config = strchr(xopt, '=');
+		if (config == NULL) {
+			error = -1;
+			break;
+		}
+		*config = '\0';
+		++config;
+		if (strcmp(xopt, "rom") == 0) {
+			const int fd = open(config, O_RDONLY);
+			if (fd < 0) {
+				warnx("%s: can't open romfile \"%s\"", __func__,
+				    config);
+				error = -1;
+				break;
+			}
+			/* determine file size */
+			const uint64_t rom_size = lseek(fd, 0, SEEK_END);
+			lseek(fd, 0, SEEK_SET);
+			/* read bios */
+			void *const rom_addr = malloc(rom_size);
+			if (rom_addr == NULL) {
+				warnx(
+				    "%s: an't malloc rom \"%s\" (size: 0x%8lx)",
+				    __func__, config, rom_size);
+				error = -ENOMEM;
+				close(fd);
+				break;
+			}
+			if (read(fd, rom_addr, rom_size) != rom_size) {
+				warnx(
+				    "%s: unable to read whole rom \"%s\" (size: 0x%8lx)",
+				    __func__, config, rom_size);
+				error = -EIO;
+				close(fd);
+				break;
+			}
+			close(fd);
+
+			/* save physical values of ROM */
+			sc->psc_bar[PCI_ROM_IDX].type = PCIBAR_ROM;
+			sc->psc_bar[PCI_ROM_IDX].addr = (uint64_t)rom_addr;
+			sc->psc_bar[PCI_ROM_IDX].size = rom_size;
+
+			continue;
+		} else {
+			/* unknown option */
+			error = -1;
+		}
+		/* option wasn't processed */
+		passthru_usage(xopt);
+		break;
+	}
+
+	return (error);
+}
+
 static int
 passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
@@ -765,6 +835,12 @@ passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 
 	pi->pi_arg = sc;
 	sc->psc_pi = pi;
+
+	/* parse opts */
+	if ((error = passthru_parse_opts(sc, opts)) != 0) {
+		warnx("invalid passthru options");
+		goto done;
+	}
 
 	/* initialize config space */
 	if ((error = cfginit(ctx, pi, bus, slot, func)) != 0)
