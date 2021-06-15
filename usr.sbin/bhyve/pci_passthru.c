@@ -751,6 +751,34 @@ passthru_parse_opts(struct passthru_softc *const sc, const char *const opts)
 }
 
 static int
+passthru_init_rom(struct vmctx *const ctx, struct passthru_softc *const sc)
+{
+	/* check if this device has a rom */
+	if (sc->psc_bar[PCI_ROM_IDX].size == 0)
+		return (0);
+
+	/* allocate ROM */
+	uint64_t rom_addr;
+	int error = pci_emul_alloc_rom(sc->psc_pi,
+	    sc->psc_bar[PCI_ROM_IDX].size, &rom_addr);
+	if (error) {
+		warnx("Failed to alloc ROM");
+		goto done;
+	}
+
+	/* copy ROM to guest */
+	memcpy((void *)rom_addr, (void *)sc->psc_bar[PCI_ROM_IDX].addr,
+	    sc->psc_bar[PCI_ROM_IDX].size);
+	/* free ROM */
+	free((void *)sc->psc_bar[PCI_ROM_IDX].addr);
+	/* save new address of ROM */
+	sc->psc_bar[PCI_ROM_IDX].addr = rom_addr;
+
+done:
+	return error;
+}
+
+static int
 passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 {
 	int bus, slot, func, error, memflags;
@@ -859,10 +887,24 @@ passthru_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 		 passthru_cfgread_default, passthru_cfgwrite_default)) != 0)
 		goto done;
 
+	/*
+	 * init_quirks may modify PCI register protection. Additionally, it may
+	 * fetch a ROM for a device.
+	 *
+	 * Therefore, keep following order!!
+	 * Before init_quirks:
+	 * 	set protection for PCI register
+	 * After init_quirks:
+	 * 	init ROM
+	 */
 	if ((error = passthru_init_quirks(ctx, pi, opts)) != 0)
 		goto done;
 
-	error = 0; /* success */
+	/* initialize ROM */
+	if ((error = passthru_init_rom(ctx, sc)) != 0)
+		goto done;
+
+	error = 0;		/* success */
 done:
 	if (error) {
 		passthru_deinit_quirks(ctx, pi);
@@ -1177,12 +1219,28 @@ passthru_mmio_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 }
 
 static void
+passthru_addr_rom(struct pci_devinst *const pi, const int idx,
+    const int enabled)
+{
+	if (!enabled)
+		vm_munmap_memseg(pi->pi_vmctx, pi->pi_bar[idx].addr,
+		    pi->pi_bar[idx].size);
+	else
+		vm_mmap_memseg(pi->pi_vmctx, pi->pi_bar[idx].addr, VM_PCIROM,
+		    pi->pi_romoffset, pi->pi_bar[idx].size,
+		    PROT_READ | PROT_EXEC);
+}
+
+static void
 passthru_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 	      int enabled, uint64_t address)
 {
 	switch (pi->pi_bar[baridx].type) {
 	case PCIBAR_IO:
 		/* IO BARs are emulated */
+		break;
+	case PCIBAR_ROM:
+		passthru_addr_rom(pi, baridx, enabled);
 		break;
 	case PCIBAR_MEM32:
 	case PCIBAR_MEM64:
