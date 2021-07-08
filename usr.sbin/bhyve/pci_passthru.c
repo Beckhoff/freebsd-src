@@ -64,7 +64,6 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/vmm.h>
 
-#include "config.h"
 #include "debug.h"
 #include "mem.h"
 #include "pci_passthru.h"
@@ -77,6 +76,8 @@ __FBSDID("$FreeBSD$");
 
 #define MSIX_TABLE_COUNT(ctrl) (((ctrl) & PCIM_MSIXCTRL_TABLE_SIZE) + 1)
 #define MSIX_CAPLEN 12
+
+#define PASSTHRU_MMIO_MAX 2
 
 static int pcifd = -1;
 
@@ -94,6 +95,7 @@ struct passthru_softc {
 	} psc_msix;
 	struct pcisel psc_sel;
 
+	struct passthru_mmio_mapping psc_mmio_map[PASSTHRU_MMIO_MAX];
 	cfgread_handler psc_pcir_rhandler[PCI_REGMAX + 1];
 	cfgwrite_handler psc_pcir_whandler[PCI_REGMAX + 1];
 };
@@ -658,6 +660,23 @@ cfginit(struct pci_devinst *pi, int bus, int slot, int func)
 	error = 0;				/* success */
 done:
 	return (error);
+}
+
+struct passthru_mmio_mapping *
+passthru_get_mmio(struct passthru_softc *sc, int num)
+{
+	assert(sc != NULL);
+	assert(num < PASSTHRU_MMIO_MAX);
+
+	return (&sc->psc_mmio_map[num]);
+}
+
+struct pcisel *
+passthru_get_sel(struct passthru_softc *sc)
+{
+	assert(sc != NULL);
+
+	return (&sc->psc_sel);
 }
 
 int
