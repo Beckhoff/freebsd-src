@@ -63,7 +63,6 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/vmm.h>
 
-#include "config.h"
 #include "debug.h"
 #include "mem.h"
 #include "pci_passthru.h"
