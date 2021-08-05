@@ -392,6 +392,7 @@ SUBDIR=	\
 	${_vmm} \
 	${_vmware} \
 	vr \
+	${_vt_dummy} \
 	vte \
 	${_wbwd} \
 	wlan \
@@ -773,6 +774,7 @@ _smartpqi=	smartpqi
 .if ${MK_BHYVE} != "no" || defined(ALL_MODULES)
 .if ${KERN_OPTS:MSMP}
 _vmm=		vmm
+_vt_dummy=	vt_dummy
 .endif
 .endif
 .endif
