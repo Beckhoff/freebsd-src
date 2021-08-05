@@ -402,6 +402,7 @@ SUBDIR=	\
 	${_vmm} \
 	${_vmware} \
 	vr \
+	${_vt_dummy} \
 	vte \
 	${_wbwd} \
 	${_wdatwd} \
@@ -826,6 +827,7 @@ _p2sb=		p2sb
 .if ${MK_BHYVE} != "no" || defined(ALL_MODULES)
 .if ${KERN_OPTS:MSMP}
 _vmm=		vmm
+_vt_dummy=	vt_dummy
 .endif
 .endif
 .endif
