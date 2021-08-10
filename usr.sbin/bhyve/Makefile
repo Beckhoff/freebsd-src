@@ -26,7 +26,6 @@ SRCS=	\
 	console.c		\
 	ctl_util.c		\
 	ctl_scsi_all.c		\
-	fwctl.c			\
 	gdb.c			\
 	hda_codec.c		\
 	inout.c			\
@@ -60,6 +59,7 @@ SRCS=	\
 	post.c			\
 	ps2kbd.c		\
 	ps2mouse.c		\
+	qemu_fwcfg.c		\
 	rfb.c			\
 	rtc.c			\
 	smbiostbl.c		\

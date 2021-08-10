@@ -89,7 +89,6 @@ __FBSDID("$FreeBSD$");
 #include "bootrom.h"
 #include "inout.h"
 #include "debug.h"
-#include "fwctl.h"
 #include "gdb.h"
 #include "ioapic.h"
 #include "kernemu_dev.h"
@@ -99,6 +98,7 @@ __FBSDID("$FreeBSD$");
 #include "pci_emul.h"
 #include "pci_irq.h"
 #include "pci_lpc.h"
+#include "qemu_fwcfg.h"
 #include "smbiostbl.h"
 #ifdef BHYVE_SNAPSHOT
 #include "snapshot.h"
@@ -1296,6 +1296,36 @@ main(int argc, char *argv[])
 	rtc_init(ctx, rtc_localtime);
 	sci_init(ctx);
 
+	if (qemu_fwcfg_init(ctx) != 0) {
+		fprintf(stderr, "qemu fwcfg initialization error");
+		exit(4);
+	}
+
+	/*
+	 * QEMU uses fwcfg item 0x0f (FW_CFG_MAX_CPUS) to report the number of
+	 * cpus to the guest but states that it has a special meaning for x86.
+	 * Don't know yet if that can cause unintented side-effects. Use an own
+	 * fwcfg item to be safe.
+	 *
+	 * QEMU comment:
+	 * 	FW_CFG_MAX_CPUS is a bit confusing/problematic on x86:
+	 *
+	 * 	For machine types prior to 1.8, SeaBIOS needs FW_CFG_MAX_CPUS
+	 * 	for building MPTable, ACPI MADT, ACPI CPU hotplug and ACPI SRAT
+	 * 	table, that tables are based on xAPIC ID and QEMU<->SeaBIOS
+	 * 	interface for CPU hotplug also uses APIC ID and not "CPU index".
+	 * 	This means that FW_CFG_MAX_CPUS is not the "maximum number of
+	 * 	CPUs", but the "limit to the APIC ID values SeaBIOS may see".
+	 *
+	 * 	So for compatibility reasons with old BIOSes we are stuck with
+	 * 	"etc/max-cpus" actually being apic_id_limit
+	 */
+	if (qemu_fwcfg_add_file("opt/bhyve/hw.ncpu", sizeof(guest_ncpus),
+		&guest_ncpus) != 0) {
+		fprintf(stderr, "could not add qemu fwcfg opt/bhyve/hw.ncpu");
+		exit(4);
+	}
+
 	/*
 	 * Exit if a device emulation finds an error in its initilization
 	 */
@@ -1379,9 +1409,6 @@ main(int argc, char *argv[])
 		error = acpi_build(ctx, guest_ncpus);
 		assert(error == 0);
 	}
-
-	if (lpc_bootrom())
-		fwctl_init();
 
 	/*
 	 * Change the proc title to include the VM name.
