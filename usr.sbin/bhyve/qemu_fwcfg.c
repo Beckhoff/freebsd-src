@@ -33,10 +33,35 @@ __FBSDID("$FreeBSD$");
 #define QEMU_FWCFG_DATA_PORT_FLAGS \
 	IOPORT_F_INOUT /* QEMU v2.4+ ignores writes */
 
+#define QEMU_FWCFG_ARCHITECTURE_MASK 0x0001
+#define QEMU_FWCFG_INDEX_MASK 0x3FFF
+
+#define QEMU_FWCFG_SELECT_READ 0
+#define QEMU_FWCFG_SELECT_WRITE 1
+
+#define QEMU_FWCFG_ARCHITECTURE_GENERIC 0
+#define QEMU_FWCFG_ARCHITECTURE_SPECIFIC 1
+
 #pragma pack(1)
+
+union qemu_fwcfg_selector {
+	struct {
+		uint16_t index : 14;
+		uint16_t writeable : 1;
+		/*
+		 * 0 = generic  | for all architectures
+		 * 1 = specific | only for current architecture
+		 */
+		uint16_t architecture : 1;
+	};
+	uint16_t bits;
+};
 
 struct qemu_fwcfg_softc {
 	struct acpi_device *acpi_dev;
+
+	uint32_t data_offset;
+	union qemu_fwcfg_selector selector;
 };
 
 #pragma pack()
@@ -48,6 +73,14 @@ qemu_fwcfg_selector_port_handler(struct vmctx *const ctx, const int vcpu,
     const int in, const int port, const int bytes, uint32_t *const eax,
     void *const arg)
 {
+	if (in) {
+		*eax = *(uint16_t *)&sc.selector;
+		return (0);
+	}
+
+	sc.data_offset = 0;
+	sc.selector.bits = *eax;
+
 	return (0);
 }
 
