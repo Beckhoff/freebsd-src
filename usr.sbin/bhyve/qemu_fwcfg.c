@@ -10,6 +10,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/endian.h>
 
 #include <machine/vmm.h>
 
@@ -42,6 +43,12 @@ __FBSDID("$FreeBSD$");
 #define QEMU_FWCFG_ARCHITECTURE_GENERIC 0
 #define QEMU_FWCFG_ARCHITECTURE_SPECIFIC 1
 
+#define QEMU_FWCFG_INDEX_SIGNATURE 0x00
+#define QEMU_FWCFG_INDEX_ID 0x01
+#define QEMU_FWCFG_INDEX_FILE_DIR 0x19
+
+#define QEMU_FWCFG_MIN_FILES 10
+
 #pragma pack(1)
 
 union qemu_fwcfg_selector {
@@ -55,6 +62,28 @@ union qemu_fwcfg_selector {
 		uint16_t architecture : 1;
 	};
 	uint16_t bits;
+};
+
+struct qemu_fwcfg_signature {
+	uint8_t signature[4];
+};
+
+struct qemu_fwcfg_id {
+	uint32_t interface : 1; /* always set */
+	uint32_t DMA : 1;
+	uint32_t reserved : 30;
+};
+
+struct qemu_fwcfg_file {
+	uint32_t be_size;
+	uint16_t be_selector;
+	uint16_t reserved;
+	uint8_t name[QEMU_FWCFG_MAX_NAME];
+};
+
+struct qemu_fwcfg_directory {
+	uint32_t be_count;
+	struct qemu_fwcfg_file files[0];
 };
 
 struct qemu_fwcfg_softc {
@@ -149,6 +178,74 @@ qemu_fwcfg_add_item(const uint16_t architecture, const uint16_t index,
 }
 
 static int
+qemu_fwcfg_add_item_file_dir()
+{
+	/* alloc directory */
+	const size_t size = sizeof(struct qemu_fwcfg_directory) +
+	    QEMU_FWCFG_MIN_FILES * sizeof(struct qemu_fwcfg_file);
+	struct qemu_fwcfg_directory *const fwcfg_directory = calloc(1, size);
+	if (fwcfg_directory == NULL) {
+		return (-ENOMEM);
+	}
+
+	/* init directory */
+	sc.directory = fwcfg_directory;
+
+	/* add directory */
+	return qemu_fwcfg_add_item(QEMU_FWCFG_ARCHITECTURE_GENERIC,
+	    QEMU_FWCFG_INDEX_FILE_DIR, sizeof(struct qemu_fwcfg_directory), (uint8_t *)sc.directory);
+}
+
+static int
+qemu_fwcfg_add_item_id()
+{
+	/* alloc id */
+	struct qemu_fwcfg_id *const fwcfg_id = calloc(1,
+	    sizeof(struct qemu_fwcfg_id));
+	if (fwcfg_id == NULL) {
+		return (-ENOMEM);
+	}
+
+	/* init id */
+	fwcfg_id->interface = 1;
+	fwcfg_id->DMA = 0;
+
+	/*
+	 * QEMU specifies ID as little endian.
+	 * Convert fwcfg_id to little endian.
+	 */
+	uint32_t *const le_fwcfg_id_ptr = (uint32_t *)fwcfg_id;
+	*le_fwcfg_id_ptr = htole32(*le_fwcfg_id_ptr);
+
+	/* add id */
+	return qemu_fwcfg_add_item(QEMU_FWCFG_ARCHITECTURE_GENERIC,
+	    QEMU_FWCFG_INDEX_ID, sizeof(struct qemu_fwcfg_id),
+	    (uint8_t *)fwcfg_id);
+}
+
+static int
+qemu_fwcfg_add_item_signature()
+{
+	/* alloc signature */
+	struct qemu_fwcfg_signature *const fwcfg_signature = calloc(1,
+	    sizeof(struct qemu_fwcfg_signature));
+	if (fwcfg_signature == NULL) {
+		return (-ENOMEM);
+	}
+
+	/* init signature */
+	fwcfg_signature->signature[0] = 'Q';
+	fwcfg_signature->signature[1] = 'E';
+	fwcfg_signature->signature[2] = 'M';
+	fwcfg_signature->signature[3] = 'U';
+
+	/* add signature */
+	return qemu_fwcfg_add_item(QEMU_FWCFG_ARCHITECTURE_GENERIC,
+	    QEMU_FWCFG_INDEX_SIGNATURE, sizeof(struct qemu_fwcfg_signature),
+	    (uint8_t *)fwcfg_signature);
+}
+
+static int
 qemu_fwcfg_register_port(const char *const name, const int port, const int size,
     const int flags, const inout_func_t handler)
 {
@@ -182,6 +279,20 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 	if (error) {
 		warnx("%s: failed to add fixed IO port for QEMU FwCfg",
 		    __func__);
+		goto done;
+	}
+
+	/* add common fwcfg items */
+	if ((error = qemu_fwcfg_add_item_signature()) != 0) {
+		warnx("%s: Unable to add signature item", __func__);
+		goto done;
+	}
+	if ((error = qemu_fwcfg_add_item_id()) != 0) {
+		warnx("%s: Unable to add id item", __func__);
+		goto done;
+	}
+	if ((error = qemu_fwcfg_add_item_file_dir()) != 0) {
+		warnx("%s: Unable to add file_dir item", __func__);
 		goto done;
 	}
 
