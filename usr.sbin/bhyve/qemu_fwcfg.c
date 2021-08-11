@@ -47,6 +47,8 @@ __FBSDID("$FreeBSD$");
 #define QEMU_FWCFG_INDEX_ID 0x01
 #define QEMU_FWCFG_INDEX_FILE_DIR 0x19
 
+#define QEMU_FWCFG_FIRST_FILE_INDEX 0x20
+
 #define QEMU_FWCFG_MIN_FILES 10
 
 #pragma pack(1)
@@ -93,6 +95,7 @@ struct qemu_fwcfg_softc {
 	union qemu_fwcfg_selector selector;
 	struct qemu_fwcfg_item items[QEMU_FWCFG_MAX_ARCHS]
 				    [QEMU_FWCFG_MAX_ENTRIES];
+	struct qemu_fwcfg_directory *directory;
 };
 
 #pragma pack()
@@ -259,6 +262,91 @@ qemu_fwcfg_register_port(const char *const name, const int port, const int size,
 	iop.handler = handler;
 
 	return register_inout(&iop);
+}
+
+int
+qemu_fwcfg_add_file(const uint8_t name[QEMU_FWCFG_MAX_NAME], const uint32_t size,
+    void *const data)
+{
+	/*
+	 * QEMU specifies count as big endian.
+	 * Convert it to host endian to work with it.
+	 */
+	const uint32_t count = be32toh(sc.directory->be_count) + 1;
+
+	/* add file to items list */
+	const uint32_t index = QEMU_FWCFG_FIRST_FILE_INDEX + count - 1;
+	const int error = qemu_fwcfg_add_item(QEMU_FWCFG_ARCHITECTURE_GENERIC,
+	    index, size, data);
+	if (error != 0) {
+		return (error);
+	}
+
+	/*
+	 * files should be sorted alphabetical, get index for new file
+	 */
+	uint32_t file_index;
+	for (file_index = 0; file_index < count; ++file_index) {
+		if (strcmp(name, sc.directory->files[file_index].name) < 0)
+			break;
+	}
+
+	if (count > QEMU_FWCFG_MIN_FILES) {
+		/* alloc new file directory */
+		const uint64_t new_size = sizeof(struct qemu_fwcfg_directory) +
+		    count * sizeof(struct qemu_fwcfg_file);
+		struct qemu_fwcfg_directory *const new_directory = calloc(1,
+		    new_size);
+		if (new_directory == NULL) {
+			warnx(
+			    "%s: Unable to allocate a new qemu fwcfg files directory (count %d)",
+			    __func__, count);
+			return (-ENOMEM);
+		}
+
+		/* copy files below file_index to new directory */
+		memcpy(new_directory->files, sc.directory->files,
+		    file_index * sizeof(struct qemu_fwcfg_file));
+
+		/* copy files behind file_index to directory */
+		memcpy(&new_directory->files[file_index + 1],
+		    &sc.directory->files[file_index],
+		    (count - file_index) * sizeof(struct qemu_fwcfg_file));
+
+		/* free old directory */
+		free(sc.directory);
+
+		/* set directory pointer to new directory */
+		sc.directory = new_directory;
+
+		/* adjust directory pointer */
+		sc.items[0][QEMU_FWCFG_INDEX_FILE_DIR].data = (uint8_t *)
+								  sc.directory;
+	} else {
+		/* shift files behind file_index */
+		for (uint32_t i = QEMU_FWCFG_MIN_FILES - 1; i > file_index; --i) {
+			memcpy(&sc.directory->files[i],
+			    &sc.directory->files[i - 1],
+			    sizeof(struct qemu_fwcfg_file));
+		}
+	}
+
+	/*
+	 * QEMU specifies count, size and index as big endian.
+	 * Save these values in big endian to simplify guest reads of these
+	 * values.
+	 */
+	sc.directory->be_count = htobe32(count);
+	sc.directory->files[file_index].be_size = htobe32(size);
+	sc.directory->files[file_index].be_selector = htobe16(index);
+	strcpy(sc.directory->files[file_index].name, name);
+
+	/* set new size for the fwcfg_file_directory */
+	sc.items[0][QEMU_FWCFG_INDEX_FILE_DIR].size =
+	    sizeof(struct qemu_fwcfg_directory) +
+	    count * sizeof(struct qemu_fwcfg_file);
+
+	return (0);
 }
 
 int
