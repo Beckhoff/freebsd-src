@@ -470,6 +470,11 @@ pci_vtblk_init(struct vmctx *ctx, struct pci_devinst *pi, nvlist_t *nvl)
 		return (1);
 	}
 
+	if (blockif_add_boot_device(pi, bctxt)) {
+		perror("Invalid boot device");
+		return (1);
+	}
+
 	size = blockif_size(bctxt);
 	sectsz = blockif_sectsz(bctxt);
 	blockif_psectsz(bctxt, &sts, &sto);
