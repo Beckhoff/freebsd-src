@@ -2675,6 +2675,12 @@ pci_nvme_parse_opts(struct pci_nvme_softc *sc, char *opts)
 				sc->dataset_management = NVME_DATASET_MANAGEMENT_ENABLE;
 			else if (!strcmp("disable", config))
 				sc->dataset_management = NVME_DATASET_MANAGEMENT_DISABLE;
+		} else if (!strcmp("bootindex", xopts)) {
+			if (pci_emul_add_boot_device(sc->nsc_pi, atoi(config))) {
+				EPRINTLN("Invalid bootindex %d", atoi(config));
+				free(uopt);
+				return (-1);
+			}
 		} else if (optidx == 0) {
 			snprintf(bident, sizeof(bident), "%d:%d",
 			         sc->nsc_pi->pi_slot, sc->nsc_pi->pi_func);

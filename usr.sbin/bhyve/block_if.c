@@ -64,6 +64,7 @@ __FBSDID("$FreeBSD$");
 #include "debug.h"
 #include "mevent.h"
 #include "block_if.h"
+#include "pci_emul.h"
 
 #define BLOCKIF_SIG	0xb109b109
 
@@ -119,6 +120,7 @@ struct blockif_ctxt {
 	TAILQ_HEAD(, blockif_elem) bc_pendq;
 	TAILQ_HEAD(, blockif_elem) bc_busyq;
 	struct blockif_elem	bc_reqs[BLOCKIF_MAXREQ];
+	int			bc_bootindex;
 };
 
 static pthread_once_t blockif_once = PTHREAD_ONCE_INIT;
@@ -427,6 +429,16 @@ blockif_init(void)
 	(void) signal(SIGCONT, SIG_IGN);
 }
 
+int
+blockif_add_boot_device(struct pci_devinst *const pi,
+    struct blockif_ctxt *const bc)
+{
+	if (bc->bc_bootindex < 0)
+		return (0);
+
+	return pci_emul_add_boot_device(pi, bc->bc_bootindex);
+}
+
 struct blockif_ctxt *
 blockif_open(const char *optstr, const char *ident)
 {
@@ -440,6 +452,7 @@ blockif_open(const char *optstr, const char *ident)
 	int extra, fd, i, sectsz;
 	int nocache, sync, ro, candelete, geom, ssopt, pssopt;
 	int nodelete;
+	int bootindex;
 
 #ifndef WITHOUT_CAPSICUM
 	cap_rights_t rights;
@@ -454,6 +467,7 @@ blockif_open(const char *optstr, const char *ident)
 	sync = 0;
 	ro = 0;
 	nodelete = 0;
+	bootindex = -1;
 
 	/*
 	 * The first element in the optstring is always a pathname.
@@ -476,7 +490,12 @@ blockif_open(const char *optstr, const char *ident)
 			;
 		else if (sscanf(cp, "sectorsize=%d", &ssopt) == 1)
 			pssopt = ssopt;
-		else {
+		else if (sscanf(cp, "bootindex=%d", &bootindex) == 1) {
+			if (bootindex < 0) {
+				EPRINTLN("%s: Invalid bootindex %d", nopt, bootindex);
+				goto err;
+			}
+		} else {
 			EPRINTLN("Invalid device option \"%s\"", cp);
 			goto err;
 		}
@@ -600,6 +619,7 @@ blockif_open(const char *optstr, const char *ident)
 	TAILQ_INIT(&bc->bc_freeq);
 	TAILQ_INIT(&bc->bc_pendq);
 	TAILQ_INIT(&bc->bc_busyq);
+	bc->bc_bootindex = bootindex;
 	for (i = 0; i < BLOCKIF_MAXREQ; i++) {
 		bc->bc_reqs[i].be_status = BST_FREE;
 		TAILQ_INSERT_HEAD(&bc->bc_freeq, &bc->bc_reqs[i], be_link);

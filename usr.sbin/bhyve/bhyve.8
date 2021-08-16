@@ -371,6 +371,9 @@ if not explicitly specified.
 Disable emulation of guest trim requests via
 .Dv DIOCGDELETE
 requests.
+.It Li bootindex= Ns Ar index
+Add the device to the bootorder at
+.Ar index .
 .El
 .Pp
 SCSI devices:
@@ -385,6 +388,9 @@ are:
 .It Li iid= Ns Ar IID
 Initiator ID to use when sending requests to specified CTL port.
 The default value is 0.
+.It Li bootindex= Ns Ar index
+Add the device to the bootorder at
+.Ar index .
 .El
 .Pp
 9P devices:
@@ -433,6 +439,9 @@ Add
 .Ar romfile
 as option ROM to the PCI device.
 The ROM will be loaded by firmware and should be capable of initializing the device.
+.It Li bootindex= Ns Ar index
+Add the device to the bootorder at
+.Ar index .
 .El
 .Pp
 Guest memory must be wired using the

@@ -61,7 +61,9 @@ struct blockif_req {
 	struct iovec	br_iov[BLOCKIF_IOV_MAX];
 };
 
+struct pci_devinst;
 struct blockif_ctxt;
+int blockif_add_boot_device(struct pci_devinst *const pi, struct blockif_ctxt *const bc);
 struct blockif_ctxt *blockif_open(const char *optstr, const char *ident);
 off_t	blockif_size(struct blockif_ctxt *bc);
 void	blockif_chs(struct blockif_ctxt *bc, uint16_t *c, uint8_t *h,

@@ -683,6 +683,12 @@ pci_vtscsi_init(struct vmctx *ctx, struct pci_devinst *pi, char *opts)
 			devname = opt;
 		} else if (strcmp(optname, "iid") == 0 && opt != NULL) {
 			sc->vss_iid = strtoul(opt, NULL, 10);
+		} else if (strcmp(optname, "bootindex") == 0 && opt != NULL) {
+			if (pci_emul_add_boot_device(pi, atoi(opt))) {
+				EPRINTLN("Invalid bootindex %d", atoi(opt));
+				free(sc);
+				return (1);
+			}
 		} else {
 			EPRINTLN("Invalid option %s", optname);
 			free(sc);

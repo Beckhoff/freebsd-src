@@ -738,6 +738,15 @@ passthru_parse_opts(struct passthru_softc *const sc, const char *const opts)
 			sc->psc_bar[PCI_ROM_IDX].size = rom_size;
 
 			continue;
+		} else if (strcmp(xopt, "bootindex") == 0) {
+			error = pci_emul_add_boot_device(sc->psc_pi, atoi(config));
+			if (error) {
+				warnx("%s: invalid bootindex %d", __func__,
+				    atoi(config));
+				break;
+			}
+
+			continue;
 		} else {
 			/* unknown option */
 			error = -1;
