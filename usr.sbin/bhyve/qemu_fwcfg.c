@@ -21,6 +21,7 @@ __FBSDID("$FreeBSD$");
 
 #include "acpi_device.h"
 #include "inout.h"
+#include "pci_lpc.h"
 #include "qemu_fwcfg.h"
 
 #define QEMU_FWCFG_ACPI_DEVICE_NAME "FWCF"
@@ -396,22 +397,30 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 		goto done;
 	}
 
-	/* add handlers for fwcfg ports */
-	if ((error = qemu_fwcfg_register_port("qemu_fwcfg_selector",
-		 QEMU_FWCFG_SELECTOR_PORT_NUMBER, QEMU_FWCFG_SELECTOR_PORT_SIZE,
-		 QEMU_FWCFG_SELECTOR_PORT_FLAGS,
-		 qemu_fwcfg_selector_port_handler)) != 0) {
-		warnx("%s: Unable to register qemu fwcfg selector port 0x%x",
-		    __func__, QEMU_FWCFG_SELECTOR_PORT_NUMBER);
-		goto done;
-	}
-	if ((error = qemu_fwcfg_register_port("qemu_fwcfg_data",
-		 QEMU_FWCFG_DATA_PORT_NUMBER, QEMU_FWCFG_DATA_PORT_SIZE,
-		 QEMU_FWCFG_DATA_PORT_FLAGS, qemu_fwcfg_data_port_handler)) !=
-	    0) {
-		warnx("%s: Unable to register qemu fwcfg data port 0x%x",
-		    __func__, QEMU_FWCFG_DATA_PORT_NUMBER);
-		goto done;
+	/*
+	 * Handlers for fwcfg ports can only be added if they are unused. That's
+	 * only the case when fwcfg is set to qemu.
+	 */
+	if (strcmp(lpc_fwcfg(), "qemu") == 0) {
+		if ((error = qemu_fwcfg_register_port("qemu_fwcfg_selector",
+			 QEMU_FWCFG_SELECTOR_PORT_NUMBER,
+			 QEMU_FWCFG_SELECTOR_PORT_SIZE,
+			 QEMU_FWCFG_SELECTOR_PORT_FLAGS,
+			 qemu_fwcfg_selector_port_handler)) != 0) {
+			warnx(
+			    "%s: Unable to register qemu fwcfg selector port 0x%x",
+			    __func__, QEMU_FWCFG_SELECTOR_PORT_NUMBER);
+			goto done;
+		}
+		if ((error = qemu_fwcfg_register_port("qemu_fwcfg_data",
+			 QEMU_FWCFG_DATA_PORT_NUMBER, QEMU_FWCFG_DATA_PORT_SIZE,
+			 QEMU_FWCFG_DATA_PORT_FLAGS,
+			 qemu_fwcfg_data_port_handler)) != 0) {
+			warnx(
+			    "%s: Unable to register qemu fwcfg data port 0x%x",
+			    __func__, QEMU_FWCFG_DATA_PORT_NUMBER);
+			goto done;
+		}
 	}
 
 done:
