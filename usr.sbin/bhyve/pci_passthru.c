@@ -77,6 +77,8 @@ __FBSDID("$FreeBSD$");
 #define MSIX_TABLE_COUNT(ctrl) (((ctrl) & PCIM_MSIXCTRL_TABLE_SIZE) + 1)
 #define MSIX_CAPLEN 12
 
+#define PCI_CAP_START_OFFSET 0x40
+
 static int pcifd = -1;
 
 static int
@@ -599,6 +601,17 @@ cfginit(struct vmctx *ctx, struct pci_devinst *pi, int bus, int slot, int func)
 	sc->psc_sel.pc_dev = slot;
 	sc->psc_sel.pc_func = func;
 
+	/* copy physical PCI header to virtual cfgspace */
+	for (uint32_t i = 0; i < PCI_CAP_START_OFFSET; ++i) {
+		/*
+		 * INTLINE and INTPIN shouldn't be aligned with it's physical
+		 * value. They are already set by pci_emul_init.
+		 */
+		if (i == PCIR_INTLINE || i == PCIR_INTPIN)
+			continue;
+		pci_set_cfgdata8(pi, i, read_config(&sc->psc_sel, i, 1));
+	}
+
 	if (cfginitmsi(sc) != 0) {
 		warnx("failed to initialize MSI for PCI %d/%d/%d",
 		    bus, slot, func);
@@ -786,6 +799,14 @@ passthru_init(struct vmctx *ctx, struct pci_devinst *pi, nvlist_t *nvl)
 	if ((error = set_pcir_handler(sc, 0, PCI_REGMAX + 1,
 		 passthru_cfgread_default, passthru_cfgwrite_default)) != 0)
 		goto done;
+	/* protect PCI header */
+	if ((error = set_pcir_handler(sc, 0, PCI_CAP_START_OFFSET,
+		 passthru_cfgread_emulate, passthru_cfgwrite_emulate)) != 0)
+		goto done;
+	/* allow access to command and status register */
+	if ((error = set_pcir_handler(sc, PCIR_COMMAND, 0x04,
+		 passthru_cfgread_default, passthru_cfgwrite_default)) != 0)
+		goto done;
 
 	error = 0;		/* success */
 done:
@@ -851,22 +872,10 @@ passthru_cfgread_default(struct vmctx *const ctx, const int vcpu,
 	sc = pi->pi_arg;
 
 	/*
-	 * PCI BARs and MSI capability is emulated.
+	 * MSI capability is emulated.
 	 */
-	if (bar_access(coff) || msicap_access(sc, coff) ||
-	    msixcap_access(sc, coff))
+	if (msicap_access(sc, coff) || msixcap_access(sc, coff))
 		return (-1);
-
-#ifdef LEGACY_SUPPORT
-	/*
-	 * Emulate PCIR_CAP_PTR if this device does not support MSI capability
-	 * natively.
-	 */
-	if (sc->psc_msi.emulated) {
-		if (coff >= PCIR_CAP_PTR && coff < PCIR_CAP_PTR + 4)
-			return (-1);
-	}
-#endif
 
 	/*
 	 * Emulate the command register.  If a single read reads both the
@@ -914,12 +923,6 @@ passthru_cfgwrite_default(struct vmctx *const ctx, const int vcpu,
 	uint16_t cmd_old;
 
 	sc = pi->pi_arg;
-
-	/*
-	 * PCI BARs are emulated
-	 */
-	if (bar_access(coff))
-		return (-1);
 
 	/*
 	 * MSI capability is emulated
