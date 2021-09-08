@@ -11,13 +11,17 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/endian.h>
+#include <sys/queue.h>
 
 #include <machine/vmm.h>
 
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "acpi_device.h"
 #include "inout.h"
@@ -101,6 +105,15 @@ struct qemu_fwcfg_softc {
 #pragma pack()
 
 static struct qemu_fwcfg_softc sc;
+
+struct qemu_fwcfg_user_file {
+	STAILQ_ENTRY(qemu_fwcfg_user_file) chain;
+	uint8_t name[QEMU_FWCFG_MAX_NAME];
+	uint32_t size;
+	void *data;
+};
+STAILQ_HEAD(qemu_fwcfg_user_file_list,
+    qemu_fwcfg_user_file) user_files = STAILQ_HEAD_INITIALIZER(user_files);
 
 static int
 qemu_fwcfg_selector_port_handler(struct vmctx *const ctx, const int vcpu,
@@ -349,6 +362,20 @@ qemu_fwcfg_add_file(const uint8_t name[QEMU_FWCFG_MAX_NAME], const uint32_t size
 	return (0);
 }
 
+static int
+qemu_fwcfg_add_user_files()
+{
+	const struct qemu_fwcfg_user_file *fwcfg_file;
+	STAILQ_FOREACH (fwcfg_file, &user_files, chain) {
+		const int error = qemu_fwcfg_add_file(fwcfg_file->name,
+		    fwcfg_file->size, fwcfg_file->data);
+		if (error)
+			return (error);
+	}
+
+	return (0);
+}
+
 int
 qemu_fwcfg_init(struct vmctx *const ctx)
 {
@@ -402,10 +429,113 @@ qemu_fwcfg_init(struct vmctx *const ctx)
 		goto done;
 	}
 
+	if ((error = qemu_fwcfg_add_user_files()) != 0) {
+		warnx("%s: Unable to add user files", __func__);
+		goto done;
+	}
+
 done:
 	if (error) {
 		acpi_device_destroy(sc.acpi_dev);
 	}
 
 	return (error);
+}
+
+static void
+qemu_fwcfg_usage(const char *opt)
+{
+	warnx("Invalid fw_cfg option \"%s\"", opt);
+	warnx("-f [name=]<name>,(string|file)=<value>");
+}
+
+/*
+ * Parses the cmdline argument for user defined fw_cfg items. The cmdline
+ * argument has the format:
+ * "-f [name=]<name>,(string|file)=<value>"
+ *
+ * E.g.: "-f opt/com.page/example,string=Hello"
+ */
+int
+qemu_fwcfg_parse_cmdline_arg(const char *opt)
+{
+	struct qemu_fwcfg_user_file *const fwcfg_file = malloc(sizeof(*fwcfg_file));
+	if (fwcfg_file == NULL) {
+		warnx("Unable to allocate fw_cfg_user_file");
+		return (-ENOMEM);
+	}
+
+	/* get pointer to <name> */
+	const char *opt_ptr = opt;
+	/* If [name=] is specified, skip it */
+	if (strncmp(opt_ptr, "name=", sizeof("name=") - 1) == 0) {
+		opt_ptr += sizeof("name=") - 1;
+	}
+
+	/* get the end of <name> */
+	const char *opt_end = strchr(opt_ptr, ',');
+	if (opt_end == NULL) {
+		qemu_fwcfg_usage(opt);
+		return (-1);
+	}
+
+	/* check if <name> is too long */
+	if (opt_end - opt_ptr > QEMU_FWCFG_MAX_NAME) {
+		warnx("fw_cfg name too long: \"%s\"", opt);
+		return (-1);
+	}
+
+	/* save <name> */
+	strncpy(fwcfg_file->name, opt_ptr, opt_end - opt_ptr);
+
+	/* set opt_ptr and opt_end to <value> */
+	opt_ptr = opt_end + 1;
+	opt_end = opt_ptr + strlen(opt_ptr);
+
+	if (strncmp(opt_ptr, "string=", sizeof("string=") - 1) == 0) {
+		opt_ptr += sizeof("string=") - 1;
+		fwcfg_file->data = strdup(opt_ptr);
+		if (fwcfg_file->data == NULL) {
+			warnx(" Can't duplicate fw_cfg_user_file string \"%s\"",
+			    opt_ptr);
+			return (-ENOMEM);
+		}
+		fwcfg_file->size = strlen(opt_ptr) + 1;
+
+	} else if (strncmp(opt_ptr, "file=", sizeof("file=") - 1) == 0) {
+		opt_ptr += sizeof("file=") - 1;
+
+		/* open file */
+		const int fd = open(opt_ptr, O_RDONLY);
+		if (fd < 0) {
+			warnx("Can't open fw_cfg_user_file file \"%s\"",
+			    opt_ptr);
+			return (-1);
+		}
+
+		/* get file size */
+		const uint64_t size = lseek(fd, 0, SEEK_END);
+		lseek(fd, 0, SEEK_SET);
+
+		/* read file */
+		fwcfg_file->data = malloc(size);
+		if (fwcfg_file->data == NULL) {
+			warnx(
+			    "Can't allocate fw_cfg_user_file file \"%s\" (size: 0x%16lx)",
+			    opt_ptr, size);
+			close(fd);
+			return (-ENOMEM);
+		}
+		fwcfg_file->size = read(fd, fwcfg_file->data, size);
+
+		close(fd);
+
+	} else {
+		qemu_fwcfg_usage(opt);
+		return (-1);
+	}
+
+	STAILQ_INSERT_TAIL(&user_files, fwcfg_file, chain);
+
+	return (0);
 }
