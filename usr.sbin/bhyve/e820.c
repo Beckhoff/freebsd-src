@@ -13,6 +13,7 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/vmm.h>
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <stdio.h>
@@ -21,6 +22,14 @@ __FBSDID("$FreeBSD$");
 
 #include "e820.h"
 #include "qemu_fwcfg.h"
+
+/*
+ * E820 always uses 64 bit entries. Emulation code will use vm_paddr_t since it
+ * works on physical addresses. If vm_paddr_t is larger than uint64_t E820 can't
+ * hold all possible physical addresses and we can get into trouble.
+ */
+static_assert(sizeof(vm_paddr_t) <= sizeof(uint64_t),
+    "Unable to represent physical memory by E820 table");
 
 #define E820_FWCFG_FILE_NAME "etc/e820"
 
@@ -284,6 +293,89 @@ e820_add_memory_hole(const uint64_t base, const uint64_t end)
 	}
 
 	return (0);
+}
+
+static uint64_t
+e820_alloc_highest(const uint64_t max_address, const uint64_t length,
+    const uint64_t alignment, const enum e820_memory_type type)
+{
+	struct e820_element *element;
+	TAILQ_FOREACH_REVERSE (element, &e820_table, e820_table, chain) {
+		const uint64_t end = MIN(max_address, element->end);
+		const uint64_t base = roundup2(element->base, alignment);
+
+		if (element->type != E820_TYPE_MEMORY || end < base ||
+		    end - base < length || end - length == 0) {
+			continue;
+		}
+
+		const uint64_t address = rounddown2(end - length, alignment);
+
+		if (e820_add_entry(address, address + length, type) != 0) {
+			return 0;
+		}
+
+		return address;
+	}
+
+	return 0;
+}
+
+static uint64_t
+e820_alloc_lowest(const uint64_t min_address, const uint64_t length,
+    const uint64_t alignment, const enum e820_memory_type type)
+{
+	struct e820_element *element;
+	TAILQ_FOREACH (element, &e820_table, chain) {
+		const uint64_t end = element->end;
+		const uint64_t base = MAX(min_address,
+		    roundup2(element->base, alignment));
+
+		if (element->type != E820_TYPE_MEMORY || end < base ||
+		    end - base < length || base == 0) {
+			continue;
+		}
+
+		if (e820_add_entry(base, base + length, type) != 0) {
+			return 0;
+		}
+
+		return base;
+	}
+
+	return 0;
+}
+
+uint64_t
+e820_alloc(const uint64_t address, const uint64_t length,
+    const uint64_t alignment, const enum e820_memory_type type,
+    const enum e820_allocation_strategy strategy)
+{
+	/* address should be aligned */
+	if (!powerof2(alignment) || (address & (alignment - 1)) != 0) {
+		return 0;
+	}
+
+	switch (strategy) {
+	case E820_ALLOCATE_ANY:
+		/*
+		 * Allocate any address. Therefore, ignore the address parameter
+		 * and reuse the code path for allocating the lowest address.
+		 */
+		return e820_alloc_lowest(0, length, alignment, type);
+	case E820_ALLOCATE_LOWEST:
+		return e820_alloc_lowest(address, length, alignment, type);
+	case E820_ALLOCATE_HIGHEST:
+		return e820_alloc_highest(address, length, alignment, type);
+	case E820_ALLOCATE_SPECIFIC:
+		if (e820_add_entry(address, address + length, type) != 0) {
+			return 0;
+		}
+
+		return address;
+	}
+
+	return 0;
 }
 
 int
