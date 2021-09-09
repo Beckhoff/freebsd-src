@@ -146,6 +146,17 @@ struct vm_pptdev_mmio {
 	size_t		len;
 };
 
+struct vm_memory_region_info {
+	vm_paddr_t base;
+	vm_paddr_t size;
+	enum vm_memory_region_type type;
+};
+
+#ifdef _KERNEL
+extern vm_paddr_t intel_graphics_stolen_base;
+extern vm_paddr_t intel_graphics_stolen_size;
+#endif
+
 struct vm_pptdev_msi {
 	int		vcpu;
 	int		bus;
@@ -309,6 +320,7 @@ enum {
 	IOCNUM_PPTDEV_MSIX = 44,
 	IOCNUM_PPTDEV_DISABLE_MSIX = 45,
 	IOCNUM_UNMAP_PPTDEV_MMIO = 46,
+	IOCNUM_GET_MEMORY_REGION_INFO = 47,
 
 	/* statistics */
 	IOCNUM_VM_STATS = 50, 
@@ -427,6 +439,8 @@ enum {
 	_IOW('v', IOCNUM_PPTDEV_DISABLE_MSIX, struct vm_pptdev)
 #define	VM_UNMAP_PPTDEV_MMIO \
 	_IOW('v', IOCNUM_UNMAP_PPTDEV_MMIO, struct vm_pptdev_mmio)
+#define VM_GET_MEMORY_REGION_INFO \
+	_IOWR('v', IOCNUM_GET_MEMORY_REGION_INFO, struct vm_memory_region_info)
 #define VM_INJECT_NMI \
 	_IOW('v', IOCNUM_INJECT_NMI, struct vm_nmi)
 #define	VM_STATS \

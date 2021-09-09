@@ -741,6 +741,10 @@ struct vm_exit {
 	} u;
 };
 
+enum vm_memory_region_type {
+	MEMORY_REGION_INTEL_GSM,
+};
+
 /* APIs to inject faults into the guest */
 void vm_inject_fault(void *vm, int vcpuid, int vector, int errcode_valid,
     int errcode);
