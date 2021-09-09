@@ -1042,6 +1042,25 @@ vm_unmap_pptdev_mmio(struct vmctx *ctx, int bus, int slot, int func,
 }
 
 int
+vm_get_memory_region_info(struct vmctx *const ctx, vm_paddr_t *const base,
+    vm_paddr_t *const size, const enum vm_memory_region_type type)
+{
+	struct vm_memory_region_info memory_region_info;
+
+	bzero(&memory_region_info, sizeof(memory_region_info));
+	memory_region_info.type = type;
+
+	const int error = ioctl(ctx->fd, VM_GET_MEMORY_REGION_INFO, &memory_region_info);
+
+	if (base)
+		*base = memory_region_info.base;
+	if (size)
+		*size = memory_region_info.size;
+
+	return (error);
+}
+
+int
 vm_setup_pptdev_msi(struct vmctx *ctx, int bus, int slot, int func,
     uint64_t addr, uint64_t msg, int numvec)
 {
@@ -1780,7 +1799,7 @@ static const cap_ioctl_t vm_ioctl_cmds[] = { VM_RUN, VM_SUSPEND, VM_REINIT,
     VM_SET_CAPABILITY, VM_GET_CAPABILITY, VM_BIND_PPTDEV,
     VM_UNBIND_PPTDEV, VM_MAP_PPTDEV_MMIO, VM_PPTDEV_MSI,
     VM_PPTDEV_MSIX, VM_UNMAP_PPTDEV_MMIO, VM_PPTDEV_DISABLE_MSIX,
-    VM_INJECT_NMI, VM_STATS, VM_STAT_DESC,
+    VM_GET_MEMORY_REGION_INFO, VM_INJECT_NMI, VM_STATS, VM_STAT_DESC,
     VM_SET_X2APIC_STATE, VM_GET_X2APIC_STATE,
     VM_GET_HPET_CAPABILITIES, VM_GET_GPA_PMAP, VM_GLA2GPA,
     VM_GLA2GPA_NOFAULT,
