@@ -91,6 +91,7 @@ __FBSDID("$FreeBSD$");
 #include "config.h"
 #include "inout.h"
 #include "debug.h"
+#include "e820.h"
 #include "fwctl.h"
 #include "gdb.h"
 #include "ioapic.h"
@@ -1491,6 +1492,11 @@ main(int argc, char *argv[])
 		exit(4);
 	}
 
+	if (e820_init(ctx) != 0) {
+		fprintf(stderr, "Unable to setup E820");
+		exit(4);
+	}
+
 	/*
 	 * Exit if a device emulation finds an error in its initilization
 	 */
@@ -1580,6 +1586,18 @@ main(int argc, char *argv[])
 		error = acpi_build(ctx, guest_ncpus);
 		assert(error == 0);
 	}
+
+	struct qemu_fwcfg_item *const e820_fwcfg_item = e820_get_fwcfg_item();
+	if (e820_fwcfg_item == NULL) {
+		fprintf(stderr, "invalid e820 table");
+		exit(4);
+	}
+	if (qemu_fwcfg_add_file("etc/e820", e820_fwcfg_item->size,
+		e820_fwcfg_item->data) != 0) {
+		fprintf(stderr, "could not add qemu fwcfg etc/e820");
+		exit(4);
+	}
+	free(e820_fwcfg_item);
 
 	if (lpc_bootrom() && strcmp(lpc_fwcfg(), "bhyve") == 0) {
 		fwctl_init();
