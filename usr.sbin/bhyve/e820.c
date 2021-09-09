@@ -28,6 +28,16 @@ __FBSDID("$FreeBSD$");
 #define MB (1024 * KB)
 #define GB (1024 * MB)
 
+/*
+ * Fix E820 memory holes:
+ * [    A0000,    C0000) VGA
+ * [    C0000,   100000) ROM
+ */
+#define E820_VGA_MEM_BASE 0xA0000
+#define E820_VGA_MEM_END 0xC0000
+#define E820_ROM_MEM_BASE 0xC0000
+#define E820_ROM_MEM_END 0x100000
+
 struct e820_element {
 	TAILQ_ENTRY(e820_element) chain;
 	uint64_t base;
@@ -201,6 +211,81 @@ e820_add_entry(const uint64_t base, const uint64_t end,
 	return (0);
 }
 
+static int
+e820_add_memory_hole(const uint64_t base, const uint64_t end)
+{
+	if (end < base) {
+		return (-1);
+	}
+
+	/*
+	 * E820 table should be always sorted in ascending order. Therefore,
+	 * search for an element which end is larger than the base parameter.
+	 */
+	struct e820_element *element;
+	TAILQ_FOREACH (element, &e820_table, chain) {
+		if (element->end > base) {
+			break;
+		}
+	}
+
+	if (element == NULL || end <= element->base) {
+		/* Nothing to do. Hole already exists */
+		return (0);
+	}
+
+	if (element->type != E820_TYPE_MEMORY) {
+		/* Memory holes are only allowed in system memory */
+		return (-1);
+	}
+
+	if (base == element->base) {
+		/*
+		 * New hole at system memory base boundary.
+		 *
+		 * Old table:
+		 * 	[ 0x1000, 0x4000] RAM
+		 * New table:
+		 * 	[ 0x2000, 0x4000] RAM
+		 */
+		element->base = end;
+
+	} else if (end == element->end) {
+		/*
+		 * New hole at system memory end boundary.
+		 *
+		 * Old table:
+		 * 	[ 0x1000, 0x4000] RAM
+		 * New table:
+		 * 	[ 0x1000, 0x3000] RAM
+		 */
+		element->end = base;
+
+	} else {
+		/*
+		 * New hole inside system memory entry. Split the system memory.
+		 *
+		 * Old table:
+		 * 	[ 0x1000, 0x4000] RAM		<-- element
+		 * New table:
+		 * 	[ 0x1000, 0x2000] RAM
+		 * 	[ 0x3000, 0x4000] RAM		<-- element
+		 */
+		struct e820_element *const ram_element = malloc(
+		    sizeof(struct e820_element));
+		if (ram_element == NULL) {
+			return (-ENOMEM);
+		}
+		ram_element->base = element->base;
+		ram_element->end = base;
+		ram_element->type = E820_TYPE_MEMORY;
+		TAILQ_INSERT_BEFORE(element, ram_element, chain);
+		element->base = end;
+	}
+
+	return (0);
+}
+
 int
 e820_init(struct vmctx *const ctx)
 {
@@ -225,6 +310,19 @@ e820_init(struct vmctx *const ctx)
 			warnx("%s: Could not add highmem", __func__);
 			return (error);
 		}
+	}
+
+	/* add memory holes to E820 table */
+	error = e820_add_memory_hole(E820_VGA_MEM_BASE, E820_VGA_MEM_END);
+	if (error) {
+		warnx("%s: Could not add VGA memory", __func__);
+		return (error);
+	}
+
+	error = e820_add_memory_hole(E820_ROM_MEM_BASE, E820_ROM_MEM_END);
+	if (error) {
+		warnx("%s: Could not add ROM area", __func__);
+		return (error);
 	}
 
 	return (0);
