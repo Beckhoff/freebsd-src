@@ -56,6 +56,37 @@ struct e820_element {
 TAILQ_HEAD(e820_table, e820_element) e820_table = TAILQ_HEAD_INITIALIZER(
     e820_table);
 
+static const char *
+e820_get_type_name(const enum e820_memory_type type)
+{
+	switch (type) {
+	case E820_TYPE_MEMORY:
+		return "RAM     ";
+	case E820_TYPE_RESERVED:
+		return "Reserved";
+	case E820_TYPE_ACPI:
+		return "ACPI    ";
+	case E820_TYPE_NVS:
+		return "NVS     ";
+	default:
+		return "Unknown ";
+	}
+}
+
+void
+e820_dump_table()
+{
+	fprintf(stderr, "E820 map:\n\r");
+	uint64_t i = 0;
+	struct e820_element *element;
+	TAILQ_FOREACH (element, &e820_table, chain) {
+		fprintf(stderr, "  (%4lu) [ %16lx, %16lx] %s\n\r", i,
+		    element->base, element->end,
+		    e820_get_type_name(element->type));
+		++i;
+	}
+}
+
 struct qemu_fwcfg_item *
 e820_get_fwcfg_item()
 {
