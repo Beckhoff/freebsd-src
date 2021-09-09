@@ -366,6 +366,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	struct vm_capability *vmcap;
 	struct vm_pptdev *pptdev;
 	struct vm_pptdev_mmio *pptmmio;
+	struct vm_memory_region_info *memory_region_info;
 	struct vm_pptdev_msi *pptmsi;
 	struct vm_pptdev_msix *pptmsix;
 	struct vm_nmi *vmnmi;
@@ -532,6 +533,19 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		pptmmio = (struct vm_pptdev_mmio *)data;
 		error = ppt_unmap_mmio(sc->vm, pptmmio->bus, pptmmio->slot,
 				       pptmmio->func, pptmmio->gpa, pptmmio->len);
+		break;
+	case VM_GET_MEMORY_REGION_INFO:
+		memory_region_info = (struct vm_memory_region_info *)data;
+		switch (memory_region_info->type) {
+		case MEMORY_REGION_INTEL_GSM:
+			memory_region_info->base = intel_graphics_stolen_base;
+			memory_region_info->size = intel_graphics_stolen_size;
+			error = 0;
+			break;
+		default:
+			error = EINVAL;
+			break;
+		}
 		break;
 	case VM_BIND_PPTDEV:
 		pptdev = (struct vm_pptdev *)data;
