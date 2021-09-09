@@ -26,6 +26,7 @@ SRCS=	\
 	console.c		\
 	ctl_util.c		\
 	ctl_scsi_all.c		\
+	e820.c			\
 	gdb.c			\
 	hda_codec.c		\
 	inout.c			\
