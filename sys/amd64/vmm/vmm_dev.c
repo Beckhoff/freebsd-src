@@ -408,6 +408,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	struct vm_pptdev *pptdev;
 	struct vm_pptdev_mmio *pptmmio;
 	struct vm_memory_region_info *memory_region_info;
+	struct vm_slat_op *slat_op;
 	struct vm_pptdev_msi *pptmsi;
 	struct vm_pptdev_msix *pptmsix;
 #ifdef COMPAT_FREEBSD13
@@ -504,6 +505,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	case VM_MMAP_MEMSEG:
 	case VM_MUNMAP_MEMSEG:
 	case VM_REINIT:
+	case VM_MODIFY_SLAT:
 		/*
 		 * ioctls that modify the memory map must lock memory
 		 * segments exclusively.
@@ -669,6 +671,26 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 			break;
 		default:
 			error = EINVAL;
+			break;
+		}
+		break;
+	case VM_MODIFY_SLAT:
+		slat_op = (struct vm_slat_op *)data;
+		switch (slat_op->type) {
+		case VM_MAP_MMIO:
+			error = vm_map_mmio(sc->vm, slat_op->gpa, slat_op->len,
+			    slat_op->hpa);
+			break;
+		case VM_UNMAP_MMIO:
+			error = vm_unmap_mmio(sc->vm, slat_op->gpa,
+			    slat_op->len);
+			break;
+		case VM_WIRE_GPA:
+			error = vm_wire_gpa(sc->vm, slat_op->gpa, slat_op->len);
+			break;
+		case VM_UNWIRE_GPA:
+			error = vm_unwire_gpa(sc->vm, slat_op->gpa,
+			    slat_op->len);
 			break;
 		}
 		break;
