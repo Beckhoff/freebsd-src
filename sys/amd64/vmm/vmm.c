@@ -636,6 +636,20 @@ vm_unmap_mmio(struct vm *vm, vm_paddr_t gpa, size_t len)
 	return (0);
 }
 
+int
+vm_wire_gpa(struct vm *const vm, const vm_paddr_t gpa, const vm_paddr_t len)
+{
+	return vm_map_wire(&vm->vmspace->vm_map, gpa, gpa + len,
+	    VM_MAP_WIRE_USER | VM_MAP_WIRE_NOHOLES);
+}
+
+int
+vm_unwire_gpa(struct vm *const vm, const vm_paddr_t gpa, const vm_paddr_t len)
+{
+	return vm_map_unwire(&vm->vmspace->vm_map, gpa, gpa + len,
+	    VM_MAP_WIRE_USER | VM_MAP_WIRE_NOHOLES);
+}
+
 /*
  * Return 'true' if 'gpa' is allocated in the guest address space.
  *
