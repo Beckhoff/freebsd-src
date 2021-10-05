@@ -182,6 +182,14 @@ int	vm_unmap_pptdev_mmio(struct vmctx *ctx, int bus, int slot, int func,
 			     vm_paddr_t gpa, size_t len);
 int vm_get_memory_region_info(struct vmctx *const ctx, vm_paddr_t *const base,
     vm_paddr_t *const size, const enum vm_memory_region_type type);
+int vm_mmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len, const vm_paddr_t hpa);
+int vm_munmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len);
+int vm_mwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len);
+int vm_munwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len);
 int	vm_setup_pptdev_msi(struct vmctx *ctx, int vcpu, int bus, int slot,
 	    int func, uint64_t addr, uint64_t msg, int numvec);
 int	vm_setup_pptdev_msix(struct vmctx *ctx, int vcpu, int bus, int slot,

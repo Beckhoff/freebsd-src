@@ -1028,6 +1028,52 @@ vm_get_memory_region_info(struct vmctx *const ctx, vm_paddr_t *const base,
 	return (error);
 }
 
+/*
+ * Modifies the second level address translation (SLAT) of the guest memory
+ * space.
+ */
+static int
+vm_mmodify_slat(struct vmctx *const ctx, const vm_paddr_t gpa, const vm_paddr_t len,
+    const vm_paddr_t hpa, const enum slat_op_type type)
+{
+	struct vm_slat_op slat_op = {
+		.gpa = gpa,
+		.len = len,
+		.hpa = hpa,
+		.type = type,
+	};
+
+	return ioctl(ctx->fd, VM_MODIFY_SLAT, &slat_op);
+}
+
+int
+vm_mmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len, const vm_paddr_t hpa)
+{
+	return vm_mmodify_slat(ctx, gpa, len, hpa, VM_MAP_MMIO);
+}
+
+int
+vm_munmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len)
+{
+	return vm_mmodify_slat(ctx, gpa, len, 0, VM_UNMAP_MMIO);
+}
+
+int
+vm_mwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len)
+{
+	return vm_mmodify_slat(ctx, gpa, len, 0, VM_WIRE_GPA);
+}
+
+int
+vm_munwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
+    const vm_paddr_t len)
+{
+	return vm_mmodify_slat(ctx, gpa, len, 0, VM_UNWIRE_GPA);
+}
+
 int
 vm_setup_pptdev_msi(struct vmctx *ctx, int vcpu, int bus, int slot, int func,
     uint64_t addr, uint64_t msg, int numvec)
@@ -1703,8 +1749,8 @@ vm_get_ioctls(size_t *len)
 	    VM_SET_CAPABILITY, VM_GET_CAPABILITY, VM_BIND_PPTDEV,
 	    VM_UNBIND_PPTDEV, VM_MAP_PPTDEV_MMIO, VM_PPTDEV_MSI,
 	    VM_PPTDEV_MSIX, VM_UNMAP_PPTDEV_MMIO, VM_PPTDEV_DISABLE_MSIX,
-	    VM_GET_MEMORY_REGION_INFO, VM_INJECT_NMI, VM_STATS, VM_STAT_DESC,
-	    VM_SET_X2APIC_STATE, VM_GET_X2APIC_STATE,
+	    VM_GET_MEMORY_REGION_INFO, VM_MODIFY_SLAT, VM_INJECT_NMI, VM_STATS,
+	    VM_STAT_DESC, VM_SET_X2APIC_STATE, VM_GET_X2APIC_STATE,
 	    VM_GET_HPET_CAPABILITIES, VM_GET_GPA_PMAP, VM_GLA2GPA,
 	    VM_GLA2GPA_NOFAULT,
 	    VM_ACTIVATE_CPU, VM_GET_CPUS, VM_SUSPEND_CPU, VM_RESUME_CPU,

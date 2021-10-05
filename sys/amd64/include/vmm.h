@@ -236,6 +236,10 @@ int vm_alloc_memseg(struct vm *vm, int ident, size_t len, bool sysmem);
 void vm_free_memseg(struct vm *vm, int ident);
 int vm_map_mmio(struct vm *vm, vm_paddr_t gpa, size_t len, vm_paddr_t hpa);
 int vm_unmap_mmio(struct vm *vm, vm_paddr_t gpa, size_t len);
+int vm_wire_gpa(struct vm *const vm, const vm_paddr_t gpa,
+    const vm_paddr_t len);
+int vm_unwire_gpa(struct vm *const vm, const vm_paddr_t gpa,
+    const vm_paddr_t len);
 int vm_assign_pptdev(struct vm *vm, int bus, int slot, int func);
 int vm_unassign_pptdev(struct vm *vm, int bus, int slot, int func);
 
