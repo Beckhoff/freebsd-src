@@ -1124,6 +1124,46 @@ vm_disable_pptdev_msix(struct vmctx *ctx, int bus, int slot, int func)
 	return ioctl(ctx->fd, VM_PPTDEV_DISABLE_MSIX, &ppt);
 }
 
+int
+vm_acpi_device_get_crs(struct vmctx *const ctx, const char *const name,
+    ACPI_BUFFER *const crs)
+{
+	if (crs == NULL) {
+		return (EINVAL);
+	}
+
+	char path[NAME_MAX];
+	snprintf(path, NAME_MAX, "\\_SB.%s", name);
+
+	/* get required size to hold CRS data */
+	struct vm_acpi_device_info acpi_device_info = {
+		.type = VM_ACPI_DEVICE_INFO_CRS,
+		.path = path,
+	};
+	int error = ioctl(ctx->fd, VM_GET_ACPI_DEVICE_INFO, &acpi_device_info);
+	if (error) {
+		return (error);
+	}
+
+	/* allocate buffer for CRS */
+	crs->Pointer = malloc(acpi_device_info.buffer_length);
+	if (crs->Pointer == NULL) {
+		return (ENOMEM);
+	}
+	crs->Length = acpi_device_info.buffer_length;
+
+	/* get CRS data */
+	acpi_device_info.buffer = crs->Pointer;
+	acpi_device_info.buffer_length = crs->Length;
+	error = ioctl(ctx->fd, VM_GET_ACPI_DEVICE_INFO, &acpi_device_info);
+	if (error) {
+		free(crs->Pointer);
+		crs->Length = 0;
+	}
+
+	return (error);
+}
+
 uint64_t *
 vm_get_stats(struct vmctx *ctx, int vcpu, struct timeval *ret_tv,
 	     int *ret_entries)
@@ -1756,7 +1796,8 @@ vm_get_ioctls(size_t *len)
 	    VM_ACTIVATE_CPU, VM_GET_CPUS, VM_SUSPEND_CPU, VM_RESUME_CPU,
 	    VM_SET_INTINFO, VM_GET_INTINFO,
 	    VM_RTC_WRITE, VM_RTC_READ, VM_RTC_SETTIME, VM_RTC_GETTIME,
-	    VM_RESTART_INSTRUCTION, VM_SET_TOPOLOGY, VM_GET_TOPOLOGY };
+	    VM_RESTART_INSTRUCTION, VM_SET_TOPOLOGY, VM_GET_TOPOLOGY,
+	    VM_GET_ACPI_DEVICE_INFO };
 
 	if (len == NULL) {
 		cmds = malloc(sizeof(vm_ioctl_cmds));

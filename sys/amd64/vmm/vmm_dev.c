@@ -387,6 +387,8 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	struct vm_memmap *mm;
 	struct vm_munmap *mu;
 	struct vm_cpu_topology *topology;
+	struct vm_acpi_device_info *acpi_device_info;
+	char acpi_device_path[NAME_MAX];
 	struct vm_readwrite_kernemu_device *kernemu;
 	uint64_t *regvals;
 	int *regnums;
@@ -910,6 +912,23 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 		vm_get_topology(sc->vm, &topology->sockets, &topology->cores,
 		    &topology->threads, &topology->maxcpus);
 		error = 0;
+		break;
+	case VM_GET_ACPI_DEVICE_INFO:
+		acpi_device_info = (struct vm_acpi_device_info *)data;
+		/* copy device name into kernel space */
+		error = copyinstr(acpi_device_info->path, acpi_device_path,
+		    sizeof(acpi_device_path), NULL);
+		if (error) {
+			break;
+		}
+		/* handle request */
+		switch (acpi_device_info->type) {
+		case VM_ACPI_DEVICE_INFO_CRS:
+			error = vmm_acpi_get_crs(acpi_device_path,
+			    acpi_device_info->buffer,
+			    &acpi_device_info->buffer_length);
+			break;
+		}
 		break;
 #ifdef BHYVE_SNAPSHOT
 	case VM_SNAPSHOT_REQ:

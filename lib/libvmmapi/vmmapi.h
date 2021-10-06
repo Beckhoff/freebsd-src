@@ -37,6 +37,8 @@
 
 #include <stdbool.h>
 
+#include <contrib/dev/acpica/include/acpi.h>
+
 /*
  * API version for out-of-tree consumers like grub-bhyve for making compile
  * time decisions.
@@ -199,6 +201,11 @@ int	vm_disable_pptdev_msix(struct vmctx *ctx, int bus, int slot, int func);
 
 int	vm_get_intinfo(struct vmctx *ctx, int vcpu, uint64_t *i1, uint64_t *i2);
 int	vm_set_intinfo(struct vmctx *ctx, int vcpu, uint64_t exit_intinfo);
+
+/*
+ * Return current resources (CRS) used by an ACPI device.
+ */
+int vm_acpi_device_get_crs(struct vmctx *const ctx, const char *const name, ACPI_BUFFER *const crs);
 
 const cap_ioctl_t *vm_get_ioctls(size_t *len);
 

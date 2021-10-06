@@ -10,5 +10,6 @@ WARNS?=	2
 LIBADD=	util
 
 CFLAGS+= -I${.CURDIR}
+CFLAGS+= -I${SRCTOP}/sys
 
 .include <bsd.lib.mk>

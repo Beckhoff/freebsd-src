@@ -282,6 +282,13 @@ struct vm_readwrite_kernemu_device {
 };
 _Static_assert(sizeof(struct vm_readwrite_kernemu_device) == 24, "ABI");
 
+struct vm_acpi_device_info {
+	const char *path;
+	void *buffer;
+	size_t buffer_length;
+	enum vm_acpi_device_info_type type;
+};
+
 enum {
 	/* general routines */
 	IOCNUM_ABIVERS = 0,
@@ -368,6 +375,9 @@ enum {
 	IOCNUM_RTC_WRITE = 101,
 	IOCNUM_RTC_SETTIME = 102,
 	IOCNUM_RTC_GETTIME = 103,
+
+	/* ACPI */
+	IOCNUM_GET_ACPI_DEVICE_INFO = 110,
 
 	/* checkpoint */
 	IOCNUM_SNAPSHOT_REQ = 113,
@@ -503,6 +513,8 @@ enum {
 	_IOR('v', IOCNUM_RTC_GETTIME, struct vm_rtc_time)
 #define	VM_RESTART_INSTRUCTION \
 	_IOW('v', IOCNUM_RESTART_INSTRUCTION, int)
+#define VM_GET_ACPI_DEVICE_INFO \
+	_IOWR('v', IOCNUM_GET_ACPI_DEVICE_INFO, struct vm_acpi_device_info)
 #define VM_SNAPSHOT_REQ \
 	_IOWR('v', IOCNUM_SNAPSHOT_REQ, struct vm_snapshot_meta)
 #define VM_RESTORE_TIME \

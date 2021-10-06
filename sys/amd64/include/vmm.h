@@ -745,6 +745,10 @@ struct vm_exit {
 	} u;
 };
 
+enum vm_acpi_device_info_type {
+	VM_ACPI_DEVICE_INFO_CRS,
+};
+
 enum vm_memory_region_type {
 	MEMORY_REGION_INTEL_GSM,
 	MEMORY_REGION_INTEL_OPREGION,
