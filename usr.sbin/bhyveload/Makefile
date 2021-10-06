@@ -10,5 +10,6 @@ LIBADD=	vmmapi
 WARNS?=	3
 
 CFLAGS+=-I${SRCTOP}/stand/userboot
+CFLAGS+= -I${SRCTOP}/sys
 
 .include <bsd.prog.mk>
