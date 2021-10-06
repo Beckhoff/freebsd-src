@@ -8,5 +8,6 @@ PACKAGE=	bhyve
 LIBADD=	vmmapi
 
 CFLAGS+=-I${SRCTOP}/stand/userboot
+CFLAGS+= -I${SRCTOP}/sys
 
 .include <bsd.prog.mk>

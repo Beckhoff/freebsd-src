@@ -129,7 +129,7 @@ CFLAGS+=-DGDB_LOG
 # Disable thread safety analysis since it only finds very simple bugs and
 # yields many false positives.
 NO_WTHREAD_SAFETY=
-
+ 
 NO_WCAST_ALIGN=
 
 SUBDIR=	kbdlayout
