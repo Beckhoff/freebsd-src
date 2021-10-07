@@ -96,3 +96,90 @@ acpi_device_destroy(struct acpi_device *const dev)
 		free(res);
 	}
 }
+
+int
+acpi_device_add_res_acpi_buffer(struct acpi_device *const dev,
+    const ACPI_BUFFER resources)
+{
+	if (dev == NULL) {
+		return (EINVAL);
+	}
+
+	int error = 0;
+	size_t offset = 0;
+	while (offset < resources.Length) {
+		const ACPI_RESOURCE *const res =
+		    (const ACPI_RESOURCE *)((UINT8 *)resources.Pointer +
+			offset);
+		switch (res->Type) {
+		case ACPI_RESOURCE_TYPE_FIXED_IO:
+			error = acpi_device_add_res_fixed_ioport(dev,
+			    res->Data.FixedIo.Address,
+			    res->Data.FixedIo.AddressLength);
+			break;
+		case ACPI_RESOURCE_TYPE_FIXED_MEMORY32:
+			error = acpi_device_add_res_fixed_memory32(dev,
+			    res->Data.FixedMemory32.WriteProtect,
+			    res->Data.FixedMemory32.Address,
+			    res->Data.FixedMemory32.AddressLength);
+			break;
+		case ACPI_RESOURCE_TYPE_END_TAG:
+			break;
+		default:
+			warnx("%s: unknown resource type %d", __func__,
+			    res->Type);
+			return (ENODEV);
+		}
+		if (error) {
+			break;
+		}
+		offset += res->Length;
+	}
+
+	return (error);
+}
+
+int
+acpi_device_add_res_fixed_ioport(struct acpi_device *const dev,
+    const UINT16 port, const UINT8 length)
+{
+	if (dev == NULL) {
+		return (EINVAL);
+	}
+
+	struct acpi_resource_list_entry *const res = calloc(1, sizeof(*res));
+	if (res == NULL) {
+		return (ENOMEM);
+	}
+
+	res->type = ACPI_RESOURCE_TYPE_FIXED_IO;
+	res->data.FixedIo.Address = port;
+	res->data.FixedIo.AddressLength = length;
+
+	SLIST_INSERT_HEAD(&dev->crs, res, chain);
+
+	return (0);
+}
+
+int
+acpi_device_add_res_fixed_memory32(struct acpi_device *const dev,
+    const UINT8 write_protected, const UINT32 address, const UINT32 length)
+{
+	if (dev == NULL) {
+		return (EINVAL);
+	}
+
+	struct acpi_resource_list_entry *const res = calloc(1, sizeof(*res));
+	if (res == NULL) {
+		return (ENOMEM);
+	}
+
+	res->type = ACPI_RESOURCE_TYPE_FIXED_MEMORY32;
+	res->data.FixedMemory32.WriteProtect = write_protected;
+	res->data.FixedMemory32.Address = address;
+	res->data.FixedMemory32.AddressLength = length;
+
+	SLIST_INSERT_HEAD(&dev->crs, res, chain);
+
+	return (0);
+}
