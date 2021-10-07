@@ -53,6 +53,7 @@ __FBSDID("$FreeBSD$");
 #include "pci_lpc.h"
 #include "pci_passthru.h"
 #include "pctestdev.h"
+#include "tpm2_device.h"
 #include "uart_emul.h"
 
 #define	IO_ICU1		0x20
@@ -97,7 +98,7 @@ lpc_device_parse(const char *opts)
 {
 	int unit, error;
 	char *str, *cpy, *lpcdev, *node_name;
-	const char *romfile, *varfile;
+	const char *romfile, *varfile, *tpm2_type;
 
 	error = -1;
 	str = cpy = strdup(opts);
@@ -562,6 +563,12 @@ lpc_pirq_routed(void)
 		pci_set_cfgdata8(lpc_bridge, 0x60 + pin, pirq_read(pin + 1));
 	for (pin = 0; pin < 4; pin++)
 		pci_set_cfgdata8(lpc_bridge, 0x68 + pin, pirq_read(pin + 5));
+}
+
+int
+lpc_tpm2_in_use(void)
+{
+	return (get_config_value("tpm2.type") != NULL);
 }
 
 #ifdef BHYVE_SNAPSHOT
