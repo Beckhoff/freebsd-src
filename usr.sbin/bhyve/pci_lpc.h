@@ -73,6 +73,7 @@ char	*lpc_pirq_name(int pin);
 void	lpc_pirq_routed(void);
 const char *lpc_bootrom(void);
 const char *lpc_fwcfg(void);
+vm_paddr_t lpc_tpm2_get_control_address(void);
 int lpc_tpm2_in_use(void);
 
 #endif
