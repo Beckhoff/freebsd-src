@@ -74,6 +74,7 @@ __FBSDID("$FreeBSD$");
 #include "bhyverun.h"
 #include "acpi.h"
 #include "pci_emul.h"
+#include "pci_lpc.h"
 #include "vmgenc.h"
 
 /*
@@ -101,7 +102,9 @@ __FBSDID("$FreeBSD$");
 #define	MCFG_SIZE		0x40
 #define	FACS_OFFSET		(MCFG_OFFSET + MCFG_SIZE)
 #define	FACS_SIZE		0x40
-#define	DSDT_OFFSET		(FACS_OFFSET + FACS_SIZE)
+#define TPM2_OFFSET		(FACS_OFFSET + FACS_SIZE)
+#define TPM2_SIZE		0x80
+#define	DSDT_OFFSET		(TPM2_OFFSET + TPM2_SIZE)
 
 #define	BHYVE_ASL_TEMPLATE	"bhyve.XXXXXXX"
 #define BHYVE_ASL_SUFFIX	".aml"
@@ -208,14 +211,21 @@ basl_fwrite_rsdt(FILE *fp)
 	EFPRINTF(fp, "\n");
 
 	/* Add in pointers to the MADT, FADT and HPET */
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 0 : %08X\n",
+	uint32_t table = 0;
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n", table++,
 	    basl_acpi_base + MADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 1 : %08X\n",
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n", table++,
 	    basl_acpi_base + FADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 2 : %08X\n",
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n", table++,
 	    basl_acpi_base + HPET_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 3 : %08X\n",
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n", table++,
 	    basl_acpi_base + MCFG_OFFSET);
+
+	/* Add pointer for miscellaneous tables */
+	if (lpc_tpm2_in_use()) {
+		EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n",
+		    table++, basl_acpi_base + TPM2_OFFSET);
+	}
 
 	EFFLUSH(fp);
 
@@ -244,14 +254,21 @@ basl_fwrite_xsdt(FILE *fp)
 	EFPRINTF(fp, "\n");
 
 	/* Add in pointers to the MADT, FADT and HPET */
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 0 : 00000000%08X\n",
-	    basl_acpi_base + MADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 1 : 00000000%08X\n",
-	    basl_acpi_base + FADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 2 : 00000000%08X\n",
-	    basl_acpi_base + HPET_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address 3 : 00000000%08X\n",
-	    basl_acpi_base + MCFG_OFFSET);
+	uint32_t table = 0;
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
+	    table++, basl_acpi_base + MADT_OFFSET);
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
+	    table++, basl_acpi_base + FADT_OFFSET);
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
+	    table++, basl_acpi_base + HPET_OFFSET);
+	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
+	    table++, basl_acpi_base + MCFG_OFFSET);
+
+	/* Add pointer for miscellaneous tables */
+	if (lpc_tpm2_in_use()) {
+		EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
+		    table++, basl_acpi_base + TPM2_OFFSET);
+	}
 
 	EFFLUSH(fp);
 
@@ -671,6 +688,46 @@ err_exit:
 	return (errno);
 }
 
+static int
+basl_fwrite_tpm2(FILE *const fp)
+{
+	if (!lpc_tpm2_in_use()) {
+		return (0);
+	}
+
+	EFPRINTF(fp, "/*\n");
+	EFPRINTF(fp, " * bhyve TPM2 template\n");
+	EFPRINTF(fp, " */\n");
+	EFPRINTF(fp, "[0004]\t\tSignature : \"TPM2\"\n");
+	EFPRINTF(fp, "[0004]\t\tTable Length : 0000004C\n");
+	EFPRINTF(fp, "[0001]\t\tRevision : 00\n");
+	EFPRINTF(fp, "[0001]\t\tChecksum : 00\n");
+	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
+	EFPRINTF(fp, "[0008]\t\tOem Table ID : \"BVTPM2  \"\n");
+	EFPRINTF(fp, "[0004]\t\tOem Revision : 00000000\n");
+
+	/* iasl will fill in the compiler ID/revision fields */
+	EFPRINTF(fp, "[0004]\t\tAsl Compiler ID : \"xxxx\"\n");
+	EFPRINTF(fp, "[0004]\t\tAsl Compiler Revision : 00000000\n");
+
+	EFPRINTF(fp, "[0002]\t\tPlatform Class : 0000\n");
+	EFPRINTF(fp, "[0002]\t\tReserved : 0000\n");
+	EFPRINTF(fp, "[0008]\t\tControl Address : %016lX\n",
+	    lpc_tpm2_get_control_address());
+	EFPRINTF(fp, "[0004]\t\tStart Method : 00000007\n");
+	EFPRINTF(fp,
+	    "[0012]\t\tMethod Parameters : 00 00 00 00 00 00 00 00 00 00 00 00\n");
+	EFPRINTF(fp, "[0004]\t\tMinimum Log Length : 00000000\n");
+	EFPRINTF(fp, "[0008]\t\tLog Address : 0000000000000000\n");
+
+	EFFLUSH(fp);
+
+	return (0);
+
+err_exit:
+	return (errno);
+}
+
 /*
  * Helper routines for writing to the DSDT from other modules.
  */
@@ -985,6 +1042,7 @@ static struct {
 	{ basl_fwrite_hpet, HPET_OFFSET },
 	{ basl_fwrite_mcfg, MCFG_OFFSET },
 	{ basl_fwrite_facs, FACS_OFFSET },
+	{ basl_fwrite_tpm2, TPM2_OFFSET },
 	{ basl_fwrite_dsdt, DSDT_OFFSET },
 	{ NULL }
 };
