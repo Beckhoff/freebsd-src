@@ -88,6 +88,7 @@ static const char *lpc_uart_names[LPC_UART_NUM] = { "COM1", "COM2", "COM3", "COM
 
 static bool pctestdev_present;
 
+static const char *lpc_tpm2_opts;
 static struct tpm2_device *lpc_tpm2;
 
 #ifndef _PATH_DEVPCI
@@ -133,6 +134,21 @@ lpc_device_parse(const char *opts)
 			error = 0;
 			goto done;
 		}
+		if (strcasecmp(lpcdev, "tpm2") == 0) {
+			if (lpc_tpm2_opts != NULL) {
+				warnx("%s: only a single TPM allowed",
+				    __func__);
+				error = EINVAL;
+				goto done;
+			}
+			lpc_tpm2_opts = str;
+			if (lpc_tpm2_opts == NULL) {
+				error = EINVAL;
+				goto done;
+			}
+			error = 0;
+			goto done;
+		}
 		for (unit = 0; unit < LPC_UART_NUM; unit++) {
 			if (strcasecmp(lpcdev, lpc_uart_names[unit]) == 0) {
 				lpc_uart_softc[unit].opts = str;
@@ -169,6 +185,7 @@ lpc_print_supported_devices()
 	printf("bootrom\n");
 	for (i = 0; i < LPC_UART_NUM; i++)
 		printf("%s\n", lpc_uart_names[i]);
+	printf("tpm2\n");
 	printf("%s\n", pctestdev_getname());
 }
 
@@ -242,6 +259,15 @@ lpc_init(struct vmctx *ctx)
 		error = bootrom_loadrom(ctx, romfile);
 		if (error)
 			return (error);
+	}
+	if (lpc_tpm2_opts != NULL) {
+		error = tpm2_device_create(&lpc_tpm2, ctx, lpc_tpm2_opts);
+		if (error) {
+			warnx(
+			    "%s: unable to create a TPM device with opts \"%s\" (%d)",
+			    __func__, lpc_tpm2_opts, error);
+			return (error);
+		}
 	}
 
 	/* COM1 and COM2 */
