@@ -39,4 +39,7 @@ int acpi_device_add_res_fixed_ioport(struct acpi_device *const dev,
 int acpi_device_add_res_fixed_memory32(struct acpi_device *const dev,
     const UINT8 write_protected, const UINT32 address, const UINT32 length);
 
+int acpi_device_get_physical_crs(const struct acpi_device *const dev,
+    ACPI_BUFFER *const crs);
+
 void acpi_device_write_dsdt(const struct acpi_device *const dev);

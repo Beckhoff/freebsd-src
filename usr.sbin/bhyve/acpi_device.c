@@ -184,6 +184,13 @@ acpi_device_add_res_fixed_memory32(struct acpi_device *const dev,
 	return (0);
 }
 
+int
+acpi_device_get_physical_crs(const struct acpi_device *const dev,
+    ACPI_BUFFER *const crs)
+{
+	return vm_acpi_device_get_crs(dev->vm_ctx, dev->name, crs);
+}
+
 static void
 acpi_device_write_dsdt_crs(const struct acpi_device *const dev)
 {
