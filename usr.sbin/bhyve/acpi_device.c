@@ -77,6 +77,12 @@ acpi_device_create(struct acpi_device **const new_dev,
 	crs_end_tag->type = ACPI_RESOURCE_TYPE_END_TAG;
 	SLIST_INSERT_HEAD(&dev->crs, crs_end_tag, chain);
 
+	const int error = acpi_tables_add_device(dev);
+	if (error) {
+		acpi_device_destroy(dev);
+		return (error);
+	}
+
 	*new_dev = dev;
 
 	return (0);
