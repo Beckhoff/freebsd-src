@@ -53,6 +53,8 @@ int acpi_device_add_res_fixed_ioport(struct acpi_device *dev, UINT16 port,
 int acpi_device_add_res_fixed_memory32(struct acpi_device *dev,
     UINT8 write_protected, UINT32 address, UINT32 length);
 
+int acpi_device_get_physical_crs(const struct acpi_device *const dev,
+    ACPI_BUFFER *const crs);
 void *acpi_device_get_softc(const struct acpi_device *dev);
 
 int acpi_device_build_table(const struct acpi_device *dev);
