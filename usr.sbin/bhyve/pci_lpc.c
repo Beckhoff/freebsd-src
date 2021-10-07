@@ -539,6 +539,12 @@ lpc_pirq_routed(void)
 		pci_set_cfgdata8(lpc_bridge, 0x68 + pin, pirq_read(pin + 5));
 }
 
+vm_paddr_t
+lpc_tpm2_get_control_address(void)
+{
+	return tpm2_device_get_control_address(lpc_tpm2);
+}
+
 int
 lpc_tpm2_in_use(void)
 {
