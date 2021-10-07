@@ -73,5 +73,6 @@ char	*lpc_pirq_name(int pin);
 void	lpc_pirq_routed(void);
 const char *lpc_bootrom(void);
 const char *lpc_fwcfg(void);
+int lpc_tpm2_in_use(void);
 
 #endif
