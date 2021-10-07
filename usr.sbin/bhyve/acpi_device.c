@@ -191,6 +191,56 @@ acpi_device_get_physical_crs(const struct acpi_device *const dev,
 	return vm_acpi_device_get_crs(dev->vm_ctx, dev->name, crs);
 }
 
+static int
+acpi_device_map_crs_resource(const struct acpi_device *const dev,
+    const struct acpi_resource_list_entry *const res)
+{
+	int error = 0;
+	switch (res->type) {
+	case ACPI_RESOURCE_TYPE_FIXED_IO:
+		warnx("%s: mapping IO is unsupported", __func__);
+		return (ENOTSUP);
+	case ACPI_RESOURCE_TYPE_FIXED_MEMORY32: {
+		/* get memory range */
+		const UINT32 base = rounddown2(res->data.FixedMemory32.Address,
+		    PAGE_SIZE);
+		const UINT32 end = roundup2(res->data.FixedMemory32.Address +
+			res->data.FixedMemory32.AddressLength,
+		    PAGE_SIZE);
+		/* map memory range */
+		error = vm_mmap_mmio(dev->vm_ctx, base, end - base, base);
+		if (error) {
+			return (error);
+		}
+		/* make memory range always visible by wiring it */
+		return vm_mwire_gpa(dev->vm_ctx, base, end - base);
+	}
+	case ACPI_RESOURCE_TYPE_END_TAG:
+		return (0);
+	default:
+		warnx("%s: unknown resource type %d", __func__, res->type);
+		return (ENODEV);
+	}
+}
+
+int
+acpi_device_map_crs(const struct acpi_device *const dev)
+{
+	if (dev == NULL) {
+		return (EINVAL);
+	}
+
+	const struct acpi_resource_list_entry *res;
+	SLIST_FOREACH (res, &dev->crs, chain) {
+		const int error = acpi_device_map_crs_resource(dev, res);
+		if (error) {
+			return (error);
+		}
+	}
+
+	return (0);
+}
+
 static void
 acpi_device_write_dsdt_crs(const struct acpi_device *const dev)
 {
