@@ -151,6 +151,9 @@ as default value.
 Subdevice id of the LPC bridge as hex number.
 On Intel systems the LPC bridge uses the physical subdevice id
 as default value.
+.It Va tpm2.type Ta integer Ta Ta
+Type of the TPM2 device passed to the guest.
+At the moment, only passthru is supported as type. 
 .It Va rtc.use_localtime Ta bool Ta true Ta
 The real time clock uses the local time of the host.
 If this is set to false, the real time clock uses UTC.
