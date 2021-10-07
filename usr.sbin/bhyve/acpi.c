@@ -62,6 +62,7 @@ __FBSDID("$FreeBSD$");
 #include "acpi.h"
 #include "basl.h"
 #include "pci_emul.h"
+#include "pci_lpc.h"
 #include "vmgenc.h"
 
 #define	BHYVE_ASL_TEMPLATE	"bhyve.XXXXXXX"
@@ -128,6 +129,42 @@ acpi_tables_add_device(const struct acpi_device *const dev)
 	SLIST_INSERT_HEAD(&acpi_devices, entry, chain);
 
 	return (0);
+}
+
+static int
+basl_fwrite_tpm2(FILE *const fp)
+{
+	EFPRINTF(fp, "/*\n");
+	EFPRINTF(fp, " * bhyve TPM2 template\n");
+	EFPRINTF(fp, " */\n");
+	EFPRINTF(fp, "[0004]\t\tSignature : \"TPM2\"\n");
+	EFPRINTF(fp, "[0004]\t\tTable Length : 0000004C\n");
+	EFPRINTF(fp, "[0001]\t\tRevision : 00\n");
+	EFPRINTF(fp, "[0001]\t\tChecksum : 00\n");
+	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
+	EFPRINTF(fp, "[0008]\t\tOem Table ID : \"BVTPM2  \"\n");
+	EFPRINTF(fp, "[0004]\t\tOem Revision : 00000000\n");
+
+	/* iasl will fill in the compiler ID/revision fields */
+	EFPRINTF(fp, "[0004]\t\tAsl Compiler ID : \"xxxx\"\n");
+	EFPRINTF(fp, "[0004]\t\tAsl Compiler Revision : 00000000\n");
+
+	EFPRINTF(fp, "[0002]\t\tPlatform Class : 0000\n");
+	EFPRINTF(fp, "[0002]\t\tReserved : 0000\n");
+	EFPRINTF(fp, "[0008]\t\tControl Address : %016lX\n",
+	    lpc_tpm2_get_control_address());
+	EFPRINTF(fp, "[0004]\t\tStart Method : 00000007\n");
+	EFPRINTF(fp,
+	    "[0012]\t\tMethod Parameters : 00 00 00 00 00 00 00 00 00 00 00 00\n");
+	EFPRINTF(fp, "[0004]\t\tMinimum Log Length : 00000000\n");
+	EFPRINTF(fp, "[0008]\t\tLog Address : 0000000000000000\n");
+
+	EFFLUSH(fp);
+
+	return (0);
+
+err_exit:
+	return (errno);
 }
 
 /*
@@ -753,6 +790,14 @@ build_spcr(struct vmctx *const ctx)
 }
 
 static int
+build_tpm2(struct vmctx *const ctx)
+{
+	BASL_EXEC(basl_compile(ctx, basl_fwrite_tpm2));
+
+	return (0);
+}
+
+static int
 build_xsdt(struct vmctx *const ctx)
 {
 	BASL_EXEC(
@@ -810,6 +855,10 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	BASL_EXEC(build_mcfg(ctx));
 	BASL_EXEC(build_facs(ctx));
 	BASL_EXEC(build_spcr(ctx));
+
+	if (lpc_tpm2_in_use()) {
+		BASL_EXEC(build_tpm2(ctx));
+	}
 
 	/* Build ACPI device-specific tables such as a TPM2 table. */
 	const struct acpi_device_list_entry *entry;
