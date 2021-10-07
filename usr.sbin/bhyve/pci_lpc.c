@@ -54,6 +54,7 @@ __FBSDID("$FreeBSD$");
 #include "pci_irq.h"
 #include "pci_lpc.h"
 #include "pctestdev.h"
+#include "tpm2_device.h"
 #include "uart_emul.h"
 
 #define	IO_ICU1		0x20
@@ -86,6 +87,8 @@ static struct lpc_uart_softc {
 static const char *lpc_uart_names[LPC_UART_NUM] = { "COM1", "COM2", "COM3", "COM4" };
 
 static bool pctestdev_present;
+
+static struct tpm2_device *lpc_tpm2;
 
 #ifndef _PATH_DEVPCI
 #define _PATH_DEVPCI "/dev/pci"
@@ -534,6 +537,12 @@ lpc_pirq_routed(void)
 		pci_set_cfgdata8(lpc_bridge, 0x60 + pin, pirq_read(pin + 1));
 	for (pin = 0; pin < 4; pin++)
 		pci_set_cfgdata8(lpc_bridge, 0x68 + pin, pirq_read(pin + 5));
+}
+
+int
+lpc_tpm2_in_use(void)
+{
+	return (lpc_tpm2 != NULL);
 }
 
 #ifdef BHYVE_SNAPSHOT

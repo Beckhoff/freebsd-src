@@ -72,5 +72,6 @@ void    lpc_print_supported_devices();
 char	*lpc_pirq_name(int pin);
 void	lpc_pirq_routed(void);
 const char *lpc_bootrom(void);
+int lpc_tpm2_in_use(void);
 
 #endif
