@@ -130,6 +130,17 @@ lpc_device_parse(const char *opts)
 			error = 0;
 			goto done;
 		}
+		if (strcasecmp(lpcdev, "tpm2") == 0) {
+			tpm2_type = strsep(&str, ",");
+			if (tpm2_type == NULL) {
+				errx(4, "invalid tpm2 option \"%s\"", opts);
+			}
+			set_config_value("tpm2.type", tpm2_type);
+
+			pci_parse_legacy_config(find_config_node("tpm2"), str);
+			error = 0;
+			goto done;
+		}
 		for (unit = 0; unit < LPC_UART_NUM; unit++) {
 			if (strcasecmp(lpcdev, lpc_uart_names[unit]) == 0) {
 				asprintf(&node_name, "lpc.%s.path",
@@ -163,6 +174,7 @@ lpc_print_supported_devices(void)
 	printf("bootrom\n");
 	for (i = 0; i < LPC_UART_NUM; i++)
 		printf("%s\n", lpc_uart_names[i]);
+	printf("tpm2\n");
 	printf("%s\n", pctestdev_getname());
 }
 
@@ -245,6 +257,15 @@ lpc_init(struct vmctx *ctx)
 		error = bootrom_loadrom(ctx, nvl);
 		if (error)
 			return (error);
+	}
+	if (lpc_tpm2_in_use()) {
+		error = tpm2_device_create(&lpc_tpm2, ctx,
+		    find_config_node("tpm2"));
+		if (error) {
+			warnx("%s: unable to create a TPM device (%d)",
+			    __func__, error);
+			return (error);
+		}
 	}
 
 	/* COM1 and COM2 */

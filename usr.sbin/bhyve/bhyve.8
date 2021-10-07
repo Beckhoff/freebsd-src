@@ -217,6 +217,8 @@ The only supported devices are the TTY-class devices
 .Cm com1 , com2 , com3 ,
 and
 .Cm com4 ,
+the TPM2 module
+.Ar tpm2 ,
 the boot ROM device
 .Cm bootrom ,
 the
@@ -615,6 +617,12 @@ The host device must have been reserved at boot-time using the
 .Va pptdevs
 loader variable as described in
 .Xr vmm 4 .
+.Pp
+TPM2 devices:
+.Bl -tag -width 10n
+.It Li passthru
+Give the guest direct access to the physical TPM2 device of the host.
+.El
 .Pp
 Virtio console device backends:
 .Bl -bullet
