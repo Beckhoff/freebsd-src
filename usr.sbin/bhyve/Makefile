@@ -72,6 +72,7 @@ SRCS=	\
 	sockstream.c		\
 	task_switch.c		\
 	tpm2_device.c		\
+	tpm2_passthru.c		\
 	uart_emul.c		\
 	usb_emul.c		\
 	usb_mouse.c		\
