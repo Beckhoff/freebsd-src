@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/vmm_snapshot.h>
 #include <x86/apicreg.h>
 
+#include "intel/intelgpu.h"
 #include "vmm_lapic.h"
 #include "vmm_stat.h"
 #include "vmm_mem.h"
@@ -548,6 +549,11 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 			memory_region_info->base = intel_graphics_stolen_base;
 			memory_region_info->size = intel_graphics_stolen_size;
 			error = 0;
+			break;
+		case MEMORY_REGION_INTEL_OPREGION:
+			error =
+			    vm_intelgpu_get_opregion(&memory_region_info->base,
+				&memory_region_info->size);
 			break;
 		default:
 			error = EINVAL;

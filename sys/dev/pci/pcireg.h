@@ -1098,3 +1098,14 @@
 #define	PCIM_OSC_CTL_PCIE_PME		0x04	/* PCIe Native Power Mgt Events */
 #define	PCIM_OSC_CTL_PCIE_AER		0x08	/* PCIe Advanced Error Reporting */
 #define	PCIM_OSC_CTL_PCIE_CAP_STRUCT	0x10	/* Various Capability Structures */
+
+/*
+ * Intel graphics device definitions
+ */
+#define PCIR_BDSM 0x5C	   /* Base of Data Stolen Memory register */
+#define PCIR_ASLS_CTL 0xFC /* Opregion start address register */
+
+/*
+ * PCI Vendors
+ */
+#define PCI_VENDOR_INTEL 0x8086
