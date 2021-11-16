@@ -743,6 +743,7 @@ struct vm_exit {
 
 enum vm_memory_region_type {
 	MEMORY_REGION_INTEL_GSM,
+	MEMORY_REGION_INTEL_OPREGION,
 };
 
 /* APIs to inject faults into the guest */
