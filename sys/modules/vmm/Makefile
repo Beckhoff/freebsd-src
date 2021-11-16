@@ -42,6 +42,7 @@ SRCS+=	iommu.c		\
 # intel-specific files
 .PATH: ${SRCTOP}/sys/amd64/vmm/intel
 SRCS+=	ept.c		\
+	intelgpu.c	\
 	vmcs.c		\
 	vmx_msr.c	\
 	vmx_support.S	\

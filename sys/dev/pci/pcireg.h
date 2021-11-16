@@ -1123,3 +1123,14 @@
 #define	PCIM_ACS_USP_MEM_TGT_ACC_CTL		0x0c00
 #define	PCIM_ACS_UNCLAIMED_REQ_REDIRECT_CTL	0x1000
 #define	PCIR_ACS_EGRESS_CONTROL_VECTOR	0x8
+
+/*
+ * Intel graphics device definitions
+ */
+#define PCIR_BDSM 0x5C	   /* Base of Data Stolen Memory register */
+#define PCIR_ASLS_CTL 0xFC /* Opregion start address register */
+
+/*
+ * PCI Vendors
+ */
+#define PCI_VENDOR_INTEL 0x8086
