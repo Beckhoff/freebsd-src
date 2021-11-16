@@ -64,6 +64,7 @@ __FBSDID("$FreeBSD$");
 #include "vmm_lapic.h"
 #include "vmm_stat.h"
 #include "vmm_mem.h"
+#include "io/acpi.h"
 #include "io/ppt.h"
 #include "io/vatpic.h"
 #include "io/vioapic.h"
@@ -554,6 +555,11 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 			error =
 			    vm_intelgpu_get_opregion(&memory_region_info->base,
 				&memory_region_info->size);
+			break;
+		case MEMORY_REGION_TPM_CONTROL_ADDRESS:
+			error = vmm_tpm2_get_control_address(
+			    &memory_region_info->base,
+			    &memory_region_info->size);
 			break;
 		default:
 			error = EINVAL;

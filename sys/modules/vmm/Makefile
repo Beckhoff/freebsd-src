@@ -29,7 +29,8 @@ SRCS+=	vmm.c		\
 	x86.c
 
 .PATH: ${SRCTOP}/sys/amd64/vmm/io
-SRCS+=	iommu.c		\
+SRCS+=	acpi.c		\
+	iommu.c		\
 	ppt.c           \
 	vatpic.c	\
 	vatpit.c	\
