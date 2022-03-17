@@ -1125,7 +1125,7 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_devinst *pi, int baridx,
 	    pci_get_cfgdata16(pi, PCIR_VENDOR) == PCI_VENDOR_NVIDIA &&
 	    pci_get_cfgdata8(pi, PCIR_CLASS) == PCIC_DISPLAY) {
 		/* dummy read to MMIO because hw might depend on it */
-		memcpy(val, nvidia_bar0 + offset, size);
+		memcpy(&val, nvidia_bar0 + offset, size);
 
 		passthru_cfgread(ctx, vcpu, pi, offset - 0x88000, size, (uint32_t *)&val);
 	} else {
