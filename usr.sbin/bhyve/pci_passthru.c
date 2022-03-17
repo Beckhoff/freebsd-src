@@ -80,6 +80,8 @@ __FBSDID("$FreeBSD$");
 
 static int pcifd = -1;
 
+uint8_t *nvidia_bar0;
+
 static int
 msi_caplen(int msgctrl)
 {
@@ -556,6 +558,12 @@ cfginitbar(struct vmctx *ctx, struct passthru_softc *sc)
 		    read_config(&sc->psc_sel, PCIR_VENDOR, 2) ==
 			PCI_VENDOR_NVIDIA &&
 		    read_config(&sc->psc_sel, PCIR_CLASS, 2) == PCIC_DISPLAY) {
+			nvidia_bar0 = mmap(NULL, size, PROT_READ | PROT_WRITE,
+			    MAP_SHARED, memfd, base);
+			if (nvidia_bar0 == NULL) {
+				warnx("Unable to mmap Nvidia BAR 0");
+				return (-1);
+			}
 			if (size < 0x88000) {
 				warnx("Invalid BAR size for Nvidia device");
 				return (-1);
@@ -1116,6 +1124,9 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_devinst *pi, int baridx,
 	} else if (baridx == 0 &&
 	    pci_get_cfgdata16(pi, PCIR_VENDOR) == PCI_VENDOR_NVIDIA &&
 	    pci_get_cfgdata8(pi, PCIR_CLASS) == PCIC_DISPLAY) {
+		/* dummy read to MMIO because hw might depend on it */
+		memcpy(val, nvidia_bar0 + offset, size);
+
 		passthru_cfgread(ctx, vcpu, pi, offset - 0x88000, size, (uint32_t *)&val);
 	} else {
 		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
