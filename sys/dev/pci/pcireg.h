@@ -1178,3 +1178,8 @@
 #define	PCIM_AMDIOMMU_MISC1_MSINUMGA_MASK 0x1f	
 
 #endif	/* __PCI_PCIREG_H */
+
+/*
+ * PCI Vendors
+ */
+#define PCI_VENDOR_NVIDIA 0x10DE
