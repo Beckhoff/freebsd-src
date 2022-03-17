@@ -44,12 +44,17 @@ uint32_t pci_host_read_config(const struct pcisel *sel, long reg, int width);
 void pci_host_write_config(const struct pcisel *sel, long reg, int width,
     uint32_t data);
 
+int passthru_cfgread_default(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff, int bytes, uint32_t *rv);
+int passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff, int bytes, uint32_t val);
 int passthru_cfgread_emulate(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff, int bytes, uint32_t *rv);
 int passthru_cfgwrite_emulate(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff, int bytes, uint32_t val);
 struct passthru_mmio_mapping *passthru_get_mmio(struct passthru_softc *sc,
     int num);
+uint64_t passthru_read_host(struct pci_devinst *pi, int baridx, uint64_t offset, int size);
 struct pcisel *passthru_get_sel(struct passthru_softc *sc);
 int set_pcir_handler(struct passthru_softc *sc, int reg, int len,
     cfgread_handler rhandler, cfgwrite_handler whandler);

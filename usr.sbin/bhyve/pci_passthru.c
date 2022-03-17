@@ -1069,7 +1069,7 @@ msixcap_access(struct passthru_softc *sc, int coff)
 	        coff < sc->psc_msix.capoff + MSIX_CAPLEN);
 }
 
-static int
+int
 passthru_cfgread_default(struct passthru_softc *sc,
     struct pci_devinst *pi __unused, int coff, int bytes, uint32_t *rv)
 {
@@ -1121,7 +1121,7 @@ passthru_cfgread(struct pci_devinst *pi, int coff, int bytes, uint32_t *rv)
 	return (passthru_cfgread_default(sc, pi, coff, bytes, rv));
 }
 
-static int
+int
 passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff, int bytes, uint32_t val)
 {
@@ -1249,12 +1249,29 @@ passthru_write(struct pci_devinst *pi, int baridx, uint64_t offset, int size,
 	}
 }
 
+uint64_t
+passthru_read_host(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
+{
+	struct passthru_softc *sc = pi->pi_arg;
+	struct pci_bar_ioreq pio;
+
+	bzero(&pio, sizeof(pio));
+	pio.pbi_sel = sc->psc_sel;
+	pio.pbi_op = PCIBARIO_READ;
+	pio.pbi_bar = baridx;
+	pio.pbi_offset = (uint32_t)offset;
+	pio.pbi_width = size;
+
+	(void)ioctl(pcifd, PCIOCBARIO, &pio);
+
+	return (pio.pbi_value);
+}
+
 static uint64_t
 passthru_read(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
 {
 	struct passthru_softc *sc;
 	struct passthru_bar_handler *handler;
-	struct pci_bar_ioreq pio;
 	uint64_t val;
 
 	sc = pi->pi_arg;
@@ -1272,16 +1289,7 @@ passthru_read(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
 			}
 		}
 
-		bzero(&pio, sizeof(pio));
-		pio.pbi_sel = sc->psc_sel;
-		pio.pbi_op = PCIBARIO_READ;
-		pio.pbi_bar = baridx;
-		pio.pbi_offset = (uint32_t)offset;
-		pio.pbi_width = size;
-
-		(void)ioctl(pcifd, PCIOCBARIO, &pio);
-
-		val = pio.pbi_value;
+		val = passthru_read_host(pi, baridx, offset, size);
 	}
 
 	return (val);
