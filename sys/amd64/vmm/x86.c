@@ -316,8 +316,6 @@ x86_emulate_cpuid(struct vcpu *vcpu, uint64_t *rax, uint64_t *rbx,
 			regs[2] &= ~(CPUID2_VMX | CPUID2_EST | CPUID2_TM2);
 			regs[2] &= ~(CPUID2_SMX);
 
-			regs[2] |= CPUID2_HV;
-
 			if (x2apic_state != X2APIC_DISABLED)
 				regs[2] |= CPUID2_X2APIC;
 			else
