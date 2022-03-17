@@ -76,6 +76,7 @@
 #define PASSTHRU_MMIO_MAX 2
 
 static int pcifd = -1;
+static uint8_t *nvidia_bar0;
 
 SET_DECLARE(passthru_dev_set, struct passthru_dev);
 
@@ -575,8 +576,22 @@ cfginitbar(struct passthru_softc *sc)
 		    read_config(&sc->psc_sel, PCIR_VENDOR, 2) ==
 			PCI_VENDOR_NVIDIA &&
 		    read_config(&sc->psc_sel, PCIR_CLASS, 2) == PCIC_DISPLAY) {
-			if (size < 0x88000) {
-				warnx("Invalid BAR size for Nvidia device");
+
+			struct pci_bar_mmap pbm;
+			memset(&pbm, 0, sizeof(pbm));
+			pbm.pbm_sel = sc->psc_sel;
+			pbm.pbm_flags = PCIIO_BAR_MMAP_RW;
+			pbm.pbm_reg = PCIR_BAR(i);
+			pbm.pbm_memattr = VM_MEMATTR_DEVICE;
+			if (ioctl(pcifd, PCIOCBARMMAP, &pbm) != 0) {
+				warn("Failed to map Nvidia BAR 0");
+				return (-1);
+			}
+			assert(pbm.pbm_bar_off == 0);
+
+			nvidia_bar0 = (uint8_t *)(uintptr_t)pbm.pbm_map_base;
+			if (pbm.pbm_map_length < 0x88000) {
+				warnx("Invalid BAR 0 size for Nvidia device");
 				return (-1);
 			}
 		}
@@ -1188,6 +1203,9 @@ passthru_read(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
 	} else if (baridx == 0 &&
 	    pci_get_cfgdata16(pi, PCIR_VENDOR) == PCI_VENDOR_NVIDIA &&
 	    pci_get_cfgdata8(pi, PCIR_CLASS) == PCIC_DISPLAY) {
+		/* dummy read to MMIO because hw might depend on it */
+		memcpy(&val, nvidia_bar0 + offset, size);
+
 		passthru_cfgread(pi, offset - 0x88000, size, (uint32_t *)&val);
 	} else {
 		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
