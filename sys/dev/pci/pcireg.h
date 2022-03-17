@@ -1109,3 +1109,4 @@
  * PCI Vendors
  */
 #define PCI_VENDOR_INTEL 0x8086
+#define PCI_VENDOR_NVIDIA 0x10DE
