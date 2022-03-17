@@ -51,6 +51,8 @@ static SYSCTL_NODE(_hw_vmm, OID_AUTO, topology, CTLFLAG_RD | CTLFLAG_MPSAFE, 0,
 
 #define	CPUID_VM_HIGH		0x40000000
 
+static const char bhyve_id[12] = "KVMKVMKVM\0\0\0";
+
 static uint64_t bhyve_xcpuids;
 SYSCTL_ULONG(_hw_vmm, OID_AUTO, bhyve_xcpuids, CTLFLAG_RW, &bhyve_xcpuids, 0,
     "Number of times an unknown cpuid leaf was accessed");
@@ -313,6 +315,8 @@ x86_emulate_cpuid(struct vcpu *vcpu, uint64_t *rax, uint64_t *rbx,
 			 */
 			regs[2] &= ~(CPUID2_VMX | CPUID2_EST | CPUID2_TM2);
 			regs[2] &= ~(CPUID2_SMX);
+
+			regs[2] |= CPUID2_HV;
 
 			if (x2apic_state != X2APIC_DISABLED)
 				regs[2] |= CPUID2_X2APIC;
@@ -592,6 +596,13 @@ x86_emulate_cpuid(struct vcpu *vcpu, uint64_t *rax, uint64_t *rbx,
 			regs[1] = 0;
 			regs[2] = 0;
 			regs[3] = 0;
+			break;
+
+		case 0x40000000:
+			regs[0] = CPUID_VM_HIGH;
+			bcopy(bhyve_id, &regs[1], 4);
+			bcopy(bhyve_id + 4, &regs[2], 4);
+			bcopy(bhyve_id + 8, &regs[3], 4);
 			break;
 
 		default:
