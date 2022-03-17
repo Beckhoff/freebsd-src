@@ -1293,6 +1293,11 @@ passthru_mmio_addr(struct pci_devinst *pi, int baridx, int enabled,
 		uint64_t len = 0x880000;
 		uint64_t hpa = sc->psc_bar[baridx].addr;
 
+		printf(
+		    "%d/%d/%d modify_mmio 0x%016lx -> 0x%016lx (size %16lx) %s\n\r",
+		    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev, sc->psc_sel.pc_func,
+		    hpa, gpa, len,
+		    enabled ? "map" : "unmap");
 		if (!enabled) {
 			if (vm_unmap_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
 				sc->psc_sel.pc_dev, sc->psc_sel.pc_func, gpa,
@@ -1313,6 +1318,11 @@ passthru_mmio_addr(struct pci_devinst *pi, int baridx, int enabled,
 		hpa += 0x880000 + 0x1000;
 		len = sc->psc_bar[baridx].size - (0x880000 + 0x1000);
 
+		printf(
+		    "%d/%d/%d modify_mmio 0x%016lx -> 0x%016lx (size %16lx) %s\n\r",
+		    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev, sc->psc_sel.pc_func,
+		    hpa, gpa, len,
+		    enabled ? "map" : "unmap");
 		if (!enabled) {
 			if (vm_unmap_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
 				sc->psc_sel.pc_dev, sc->psc_sel.pc_func, gpa,
