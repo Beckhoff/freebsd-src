@@ -373,9 +373,9 @@ static void
 ppt_pci_reset(device_t dev)
 {
 
-	if (pcie_flr(dev,
-	     max(pcie_get_max_completion_timeout(dev) / 1000, 10), true))
-		return;
+	// if (pcie_flr(dev,
+	//      max(pcie_get_max_completion_timeout(dev) / 1000, 10), true))
+	// 	return;
 
 	pci_power_reset(dev);
 }
