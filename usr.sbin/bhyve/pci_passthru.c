@@ -1091,18 +1091,7 @@ passthru_write(struct vmctx *ctx, int vcpu, struct pci_devinst *pi, int baridx,
 	} else if (baridx == 0 &&
 	    pci_get_cfgdata16(pi, PCIR_VENDOR) == PCI_VENDOR_NVIDIA &&
 	    pci_get_cfgdata8(pi, PCIR_CLASS) == PCIC_DISPLAY) {
-		if (offset >= 0x1000 && offset < 0x1000 + 0x1000) {
-			if (offset >= 0x1800 && offset < 0x1800 + 0x100) {
-				passthru_cfgwrite(ctx, vcpu, pi,
-				    offset - 0x1800, size, value);
-			} else {
-				memcpy((uint8_t *)nvidia_bar0 + offset, &value,
-				    size);
-			}
-		} else {
-			passthru_cfgwrite(ctx, vcpu, pi, offset - 0x88000, size,
-			    value);
-		}
+		passthru_cfgwrite(ctx, vcpu, pi, offset - 0x88000, size, value);
 	} else {
 		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
 		assert(size == 1 || size == 2 || size == 4);
@@ -1138,15 +1127,7 @@ passthru_read(struct vmctx *ctx, int vcpu, struct pci_devinst *pi, int baridx,
 		/* dummy read to MMIO because hw might depend on it */
 		memcpy(val, nvidia_bar0 + offset, size);
 
-		if (offset >= 0x1000 && offset < 0x1000 + 0x1000) {
-			if (offset >= 0x1800 && offset < 0x1800 + 0x100) {
-				passthru_cfgread(ctx, vcpu, pi,
-				    offset - 0x1800, size, (uint32_t *)&val);
-			}
-		} else {
-			passthru_cfgread(ctx, vcpu, pi, offset - 0x88000, size,
-			    (uint32_t *)&val);
-		}
+		passthru_cfgread(ctx, vcpu, pi, offset - 0x88000, size, (uint32_t *)&val);
 	} else {
 		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
 		assert(size == 1 || size == 2 || size == 4);
@@ -1228,7 +1209,7 @@ passthru_mmio_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 	if (pci_get_cfgdata16(pi, PCIR_VENDOR) == PCI_VENDOR_NVIDIA &&
 	    pci_get_cfgdata8(pi, PCIR_CLASS) == PCIC_DISPLAY && baridx == 0) {
 		uint64_t gpa = address;
-		uint64_t len = 0x1000;
+		uint64_t len = 0x880000;
 		uint64_t hpa = sc->psc_bar[baridx].addr;
 
 		printf(
@@ -1252,32 +1233,8 @@ passthru_mmio_addr(struct vmctx *ctx, struct pci_devinst *pi, int baridx,
 			}
 		}
 
-		gpa += len + 0x1000;
-		hpa += len + 0x1000;
-		len = 0x880000 - (0x1000 + 0x1000);
-
-		printf(
-		    "%d/%d/%d modify_mmio 0x%016lx -> 0x%016lx (size %16lx) %s\n\r",
-		    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev, sc->psc_sel.pc_func,
-		    hpa, gpa, len, enabled ? "map" : "unmap");
-		if (!enabled) {
-			if (vm_unmap_pptdev_mmio(ctx, sc->psc_sel.pc_bus,
-				sc->psc_sel.pc_dev, sc->psc_sel.pc_func, gpa,
-				len) != 0) {
-				warnx(
-				    "pci_passthru: vm_unmap_pptdev_mmio nvidia low failed");
-			}
-		} else {
-			if (vm_map_pptdev_mmio(ctx, sc->psc_sel.pc_bus,
-				sc->psc_sel.pc_dev, sc->psc_sel.pc_func, gpa,
-				len, hpa) != 0) {
-				warnx(
-				    "pci_passthru: vm_map_pptdev_mmio nvidia low failed");
-			}
-		}
-
-		gpa += len + 0x1000;
-		hpa += len + 0x1000;
+		gpa += 0x880000 + 0x1000;
+		hpa += 0x880000 + 0x1000;
 		len = sc->psc_bar[baridx].size - (0x880000 + 0x1000);
 
 		printf(
