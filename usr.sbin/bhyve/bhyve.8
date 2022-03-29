@@ -56,6 +56,7 @@
 .Oc
 .Op Fl G Ar port
 .Op Fl k Ar config_file
+.Op Fl K Ar layout
 .Oo Fl l
 .Sm off
 .Ar lpcdev Op Cm \&, Ar conf
@@ -188,6 +189,14 @@ are ignored.
 See
 .Xr bhyve_config 5
 for more details.
+.It Fl K Ar layout
+Specify the keyboard layout.
+The value that can be specified sets the file name in
+.Ar /usr/share/bhyve/kbdlayout .
+This specification only works when loaded with UEFI mode for VNC.
+(Not working via serial console or SSH)
+When using a VNC client that supports QEMU Extended Key Event Message (e.g. TigerVNC), this option isn't needed.
+When using a VNC client that doesn't support QEMU Extended Key Event Message (e.g. tightVNC), the default layout defaults to the US keyboard unless specified otherwise.
 .It Fl l Cm help
 Print a list of supported LPC devices.
 .It Fl l Ar lpcdev Ns Op Cm \&, Ns Ar conf

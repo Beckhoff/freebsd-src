@@ -189,6 +189,8 @@ extern int vmexit_task_switch(struct vmctx *, struct vm_exit *, int *vcpu);
 int guest_ncpus;
 uint16_t cores, maxcpus, sockets, threads;
 
+char *kbdlayout_name;
+
 int raw_stdio = 0;
 
 static char *progname;
@@ -226,7 +228,7 @@ usage(int code)
         fprintf(stderr,
 		"Usage: %s [-AaCDeHhPSuWwxY]\n"
 		"       %*s [-c [[cpus=]numcpus][,sockets=n][,cores=n][,threads=n]]\n"
-		"       %*s [-G port] [-k config_file] [-l lpc] [-m mem] [-o var=value]\n"
+		"       %*s [-G port] [-k config_file] [-K layout] [-K layout][-l lpc] [-m mem] [-o var=value]\n"
 		"       %*s [-p vcpu:hostcpu] [-r file] [-s pci] [-U uuid] vmname\n"
 		"       -A: create ACPI tables\n"
 		"       -a: local apic is in xAPIC mode (deprecated)\n"
@@ -1228,9 +1230,9 @@ main(int argc, char *argv[])
 	progname = basename(argv[0]);
 
 #ifdef BHYVE_SNAPSHOT
-	optstr = "aehuwxACDHIPSWYk:f:o:p:G:c:s:m:l:U:r:";
+	optstr = "aehuwxACDHIPSWYk:K:f:o:p:G:c:s:m:l:U:r:";
 #else
-	optstr = "aehuwxACDHIPSWYk:f:o:p:G:c:s:m:l:U:";
+	optstr = "aehuwxACDHIPSWYk:K:f:o:p:G:c:s:m:l:U:";
 #endif
 	while ((c = getopt(argc, argv, optstr)) != -1) {
 		switch (c) {
@@ -1272,6 +1274,9 @@ main(int argc, char *argv[])
 			break;
 		case 'k':
 			parse_simple_config_file(optarg);
+			break;
+		case 'K':
+			kbdlayout_name = optarg;
 			break;
 		case 'l':
 			if (strncmp(optarg, "help", strlen(optarg)) == 0) {
