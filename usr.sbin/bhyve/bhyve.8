@@ -55,6 +55,7 @@
 .Sm on
 .Oc
 .Op Fl G Ar port
+.Op Fl K Ar layout
 .Oo Fl l
 .Sm off
 .Cm help | Ar lpcdev Op Cm \&, Ar conf
@@ -168,6 +169,14 @@ Print help message and exit.
 .It Fl H
 Yield the virtual CPU thread when a HLT instruction is detected.
 If this option is not specified, virtual CPUs will use 100% of a host CPU.
+.It Fl K Ar layout
+Specify the keyboard layout.
+The value that can be specified sets the file name in
+.Ar /usr/share/bhyve/kbdlayout .
+This specification only works when loaded with UEFI mode for VNC.
+(Not working via serial console or SSH)
+When using a VNC client that supports QEMU Extended Key Event Message (e.g. TigerVNC), this option isn't needed.
+When using a VNC client that doesn't support QEMU Extended Key Event Message (e.g. tightVNC), the default layout defaults to the US keyboard unless specified otherwise.
 .It Fl l Op Ar help|lpcdev Ns Op , Ns Ar conf
 Allow devices behind the LPC PCI-ISA bridge to be configured.
 The only supported devices are the TTY-class devices

@@ -137,4 +137,6 @@ CFLAGS+=-DGDB_LOG
 
 WARNS?=	2
 
+SUBDIR=	kbdlayout
+
 .include <bsd.prog.mk>

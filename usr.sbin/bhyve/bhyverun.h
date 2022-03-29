@@ -39,6 +39,7 @@ extern int guest_ncpus;
 extern uint16_t cores, sockets, threads;
 extern char *guest_uuid_str;
 extern const char *vmname;
+extern char *kbdlayout_name;
 
 void *paddr_guest2host(struct vmctx *ctx, uintptr_t addr, size_t len);
 #ifdef BHYVE_SNAPSHOT

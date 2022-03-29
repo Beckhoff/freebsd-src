@@ -190,6 +190,8 @@ const char *vmname;
 int guest_ncpus;
 uint16_t cores, maxcpus, sockets, threads;
 
+char *kbdlayout_name;
+
 char *guest_uuid_str;
 
 int raw_stdio = 0;
@@ -240,7 +242,7 @@ usage(int code)
         fprintf(stderr,
 		"Usage: %s [-aehuwxACDHPSWY]\n"
 		"       %*s [-c [[cpus=]numcpus][,sockets=n][,cores=n][,threads=n]]\n"
-		"       %*s [-l <lpc>]\n"
+		"       %*s [-K layout] [-l <lpc>]\n"
 		"       %*s [-m mem] [-p vcpu:hostcpu] [-s <pci>] [-U uuid] <vm>\n"
 		"       -a: local apic is in xAPIC mode (deprecated)\n"
 		"       -A: create ACPI tables\n"
@@ -250,6 +252,7 @@ usage(int code)
 		"       -e: exit on unhandled I/O access\n"
 		"       -h: help\n"
 		"       -H: vmexit from the guest on hlt\n"
+		"       -K: PS2 keyboard layout\n"
 		"       -l: LPC device configuration\n"
 		"       -m: memory size in MB\n"
 #ifdef BHYVE_SNAPSHOT
@@ -1107,11 +1110,12 @@ main(int argc, char *argv[])
 	mptgen = 1;
 	rtc_localtime = 1;
 	memflags = 0;
+	kbdlayout_name = NULL;
 
 #ifdef BHYVE_SNAPSHOT
-	optstr = "aehuwxACDHIPSWYp:f:G:c:s:m:l:U:r:";
+	optstr = "aehuwxACDHIPSWYp:f:G:c:s:m:l:K:U:r:";
 #else
-	optstr = "aehuwxACDHIPSWYp:f:G:c:s:m:l:U:";
+	optstr = "aehuwxACDHIPSWYp:f:G:c:s:m:l:K:U:";
 #endif
 	while ((c = getopt(argc, argv, optstr)) != -1) {
 		switch (c) {
@@ -1150,6 +1154,9 @@ main(int argc, char *argv[])
 				optarg++;
 			}
 			gdb_port = atoi(optarg);
+			break;
+		case 'K':
+			kbdlayout_name = optarg;
 			break;
 		case 'l':
 			if (strncmp(optarg, "help", strlen(optarg)) == 0) {
