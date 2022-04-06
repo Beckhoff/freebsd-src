@@ -37,6 +37,16 @@ struct basl_table {
 STAILQ_HEAD(basl_table_list, basl_table) basl_tables = STAILQ_HEAD_INITIALIZER(
     basl_tables);
 
+struct basl_table_checksum {
+	STAILQ_ENTRY(basl_table_checksum) chain;
+	struct basl_table *table;
+	uint32_t off;
+	uint32_t start;
+	uint32_t len;
+};
+STAILQ_HEAD(basl_table_checksum_list, basl_table_checksum) basl_checksums =
+    STAILQ_HEAD_INITIALIZER(basl_checksums);
+
 struct basl_table_length {
 	STAILQ_ENTRY(basl_table_length) chain;
 	struct basl_table *table;
@@ -138,6 +148,60 @@ basl_finish_alloc()
 }
 
 static int
+basl_finish_patch_checksums()
+{
+	struct basl_table_checksum *checksum;
+	STAILQ_FOREACH (checksum, &basl_checksums, chain) {
+		const struct basl_table *const table = checksum->table;
+
+		uint32_t len = checksum->len;
+		if (len == BASL_TABLE_CHECKSUM_LEN_FULL_TABLE) {
+			len = table->len;
+		}
+
+		/*
+		 * Old guest bios versions search for ACPI tables in the guest
+		 * memory and install them as is. Therefore, patch the checksum
+		 * in the guest memory copies to a correct value.
+		 */
+		const uint64_t gpa = BHYVE_ACPI_BASE + table->off +
+		    checksum->start;
+		if ((gpa < BHYVE_ACPI_BASE) ||
+		    (gpa < BHYVE_ACPI_BASE + table->off)) {
+			warnx("%s: invalid gpa (off 0x%8x start 0x%8x)",
+			    __func__, table->off, checksum->start);
+			return (EFAULT);
+		}
+
+		uint8_t *const gva = (uint8_t *)vm_map_gpa(table->ctx, gpa,
+		    len);
+		if (gva == NULL) {
+			warnx("%s: could not map gpa [ 0x%16lx, 0x%16lx ]",
+			    __func__, gpa, gpa + len);
+			return (ENOMEM);
+		}
+		uint8_t *const checksum_gva = gva + checksum->off;
+		if (checksum_gva < gva) {
+			warnx("%s: invalid checksum offset 0x%8x", __func__,
+			    checksum->off);
+			return (EFAULT);
+		}
+
+		uint8_t sum = 0;
+		for (uint32_t i = 0; i < len; ++i) {
+			sum += *(gva + i);
+		}
+		*checksum_gva =  -sum;
+
+		/* Cause guest bios to patch the checksum. */
+		BASL_EXEC(qemu_loader_add_checksum(basl_loader,
+		    table->fwcfg_name, checksum->off, checksum->start, len));
+	}
+
+	return (0);
+}
+
+static int
 basl_finish_set_length()
 {
 	struct basl_table_length *length;
@@ -162,6 +226,7 @@ basl_finish()
 
 	BASL_EXEC(basl_finish_set_length());
 	BASL_EXEC(basl_finish_alloc());
+	BASL_EXEC(basl_finish_patch_checksums());
 	BASL_EXEC(qemu_loader_finish(basl_loader));
 
 	return (0);
@@ -171,6 +236,27 @@ int
 basl_init()
 {
 	return (qemu_loader_create(&basl_loader, QEMU_FWCFG_FILE_TABLE_LOADER));
+}
+
+static int
+basl_table_add_checksum(struct basl_table *const table, const uint32_t off,
+    const uint32_t start, const uint32_t len)
+{
+	struct basl_table_checksum *const checksum = calloc(1,
+	    sizeof(struct basl_table_checksum));
+	if (checksum == NULL) {
+		warnx("%s: failed to allocate checksum", __func__);
+		return (ENOMEM);
+	}
+
+	checksum->table = table;
+	checksum->off = off;
+	checksum->start = start;
+	checksum->len = len;
+
+	STAILQ_INSERT_TAIL(&basl_checksums, checksum, chain);
+
+	return (0);
 }
 
 static int
@@ -217,6 +303,20 @@ basl_table_append_bytes(struct basl_table *const table, const void *const bytes,
 	table->len += len;
 
 	memcpy(end, bytes, len);
+
+	return (0);
+}
+
+int
+basl_table_append_checksum(struct basl_table *const table, const uint32_t start,
+    const uint32_t len)
+{
+	if (table == NULL) {
+		return (EINVAL);
+	}
+
+	BASL_EXEC(basl_table_add_checksum(table, table->len, start, len));
+	BASL_EXEC(basl_table_append_int(table, 0, 1));
 
 	return (0);
 }
