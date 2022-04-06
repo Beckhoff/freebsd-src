@@ -135,6 +135,8 @@ static FILE *dsdt_fp;
 static int dsdt_indent_level;
 static int dsdt_error;
 
+struct basl_table *xsdt;
+
 struct basl_fio {
 	int	fd;
 	FILE	*fp;
@@ -229,49 +231,6 @@ basl_fwrite_rsdt(FILE *fp)
 	/* Add pointer for miscellaneous tables */
 	if (lpc_tpm2_in_use()) {
 		EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : %08X\n",
-		    table++, basl_acpi_base + TPM2_OFFSET);
-	}
-
-	EFFLUSH(fp);
-
-	return (0);
-
-err_exit:
-	return (errno);
-}
-
-static int
-basl_fwrite_xsdt(FILE *fp)
-{
-	EFPRINTF(fp, "/*\n");
-	EFPRINTF(fp, " * bhyve XSDT template\n");
-	EFPRINTF(fp, " */\n");
-	EFPRINTF(fp, "[0004]\t\tSignature : \"XSDT\"\n");
-	EFPRINTF(fp, "[0004]\t\tTable Length : 00000000\n");
-	EFPRINTF(fp, "[0001]\t\tRevision : 01\n");
-	EFPRINTF(fp, "[0001]\t\tChecksum : 00\n");
-	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
-	EFPRINTF(fp, "[0008]\t\tOem Table ID : \"BVXSDT  \"\n");
-	EFPRINTF(fp, "[0004]\t\tOem Revision : 00000001\n");
-	/* iasl will fill in the compiler ID/revision fields */
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler ID : \"xxxx\"\n");
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler Revision : 00000000\n");
-	EFPRINTF(fp, "\n");
-
-	/* Add in pointers to the MADT, FADT and HPET */
-	uint32_t table = 0;
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
-	    table++, basl_acpi_base + MADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
-	    table++, basl_acpi_base + FADT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
-	    table++, basl_acpi_base + HPET_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
-	    table++, basl_acpi_base + MCFG_OFFSET);
-
-	/* Add pointer for miscellaneous tables */
-	if (lpc_tpm2_in_use()) {
-		EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
 		    table++, basl_acpi_base + TPM2_OFFSET);
 	}
 
@@ -781,6 +740,9 @@ build_fadt(struct vmctx *const ctx)
 	/* Hypervisor Vendor Identity */
 	BASL_EXEC(basl_table_append_int(fadt, 0, 8));
 
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_FADT,
+	    ACPI_XSDT_ENTRY_SIZE));
+
 	return (0);
 }
 
@@ -807,6 +769,9 @@ build_hpet(struct vmctx *const ctx)
 	BASL_EXEC(basl_table_append_int(hpet, 0, 2));
 	/* Flags */
 	BASL_EXEC(basl_table_append_int(hpet, ACPI_HPET_PAGE_PROTECT4, 4));
+
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_HPET,
+	    ACPI_XSDT_ENTRY_SIZE));
 
 	return (0);
 }
@@ -902,6 +867,9 @@ build_madt(struct vmctx *const ctx)
 	/* Local APIC LINT */
 	BASL_EXEC(basl_table_append_int(madt, 1, 1));
 
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_MADT,
+	    ACPI_XSDT_ENTRY_SIZE));
+
 	return (0);
 }
 
@@ -929,6 +897,9 @@ build_mcfg(struct vmctx *const ctx)
 	BASL_EXEC(basl_table_append_int(mcfg, 0xFF, 1));
 	/* Reserved */
 	BASL_EXEC(basl_table_append_int(mcfg, 0, 4));
+
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_MCFG,
+	    ACPI_XSDT_ENTRY_SIZE));
 
 	return (0);
 }
@@ -961,6 +932,24 @@ build_tpm2(struct vmctx *const ctx)
 	BASL_EXEC(basl_table_append_int(tpm2, 0, 4));
 	/* Log Area Start Address */
 	BASL_EXEC(basl_table_append_int(tpm2, 0, 8));
+
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_TPM2,
+	    ACPI_XSDT_ENTRY_SIZE));
+
+	return (0);
+}
+
+static int
+build_xsdt(struct vmctx *const ctx)
+{
+	BASL_EXEC(basl_table_create(&xsdt, ctx, ACPI_SIG_XSDT,
+	    BASL_TABLE_ALIGNMENT, XSDT_OFFSET));
+
+	/* Header */
+	BASL_EXEC(
+	    basl_table_append_header(xsdt, ACPI_SIG_XSDT, BASL_REVISION_XSDT,
+		BASL_OEM_ID, BASL_OEM_TABLE_ID_XSDT, BASL_OEM_REVISION_XSDT));
+	/* Pointers (added by other build_XXX funcs) */
 
 	return (0);
 }
@@ -1004,7 +993,7 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	 */
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_rsdp, 0));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_rsdt, RSDT_OFFSET));
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_xsdt, XSDT_OFFSET));
+	BASL_EXEC(build_xsdt(ctx));
 	BASL_EXEC(build_fadt(ctx));
 	BASL_EXEC(build_madt(ctx));
 	BASL_EXEC(build_hpet(ctx));
