@@ -38,20 +38,6 @@
  *
  *  The tables are placed in the guest's ROM area just below 1MB physical,
  * above the MPTable.
- *
- *  Layout (No longer correct at FADT and beyond due to properly
- *  calculating the size of the MADT to allow for changes to
- *  VM_MAXCPU above 21 which overflows this layout.)
- *  ------
- *   RSDP  ->   0xf2400    (36 bytes fixed)
- *     RSDT  ->   0xf2440    (36 bytes + 4*7 table addrs, 4 used)
- *     XSDT  ->   0xf2480    (36 bytes + 8*7 table addrs, 4 used)
- *       MADT  ->   0xf2500  (depends on #CPUs)
- *       FADT  ->   0xf2600  (268 bytes)
- *       HPET  ->   0xf2740  (56 bytes)
- *       MCFG  ->   0xf2780  (60 bytes)
- *         FACS  ->   0xf27C0 (64 bytes)
- *         DSDT  ->   0xf2800 (variable - can go up to 0x100000)
  */
 
 #include <sys/cdefs.h>
@@ -78,34 +64,6 @@ __FBSDID("$FreeBSD$");
 #include "pci_emul.h"
 #include "pci_lpc.h"
 #include "vmgenc.h"
-
-/*
- * Define the base address of the ACPI tables, the sizes of some tables, 
- * and the offsets to the individual tables,
- */
-#define RSDT_OFFSET		0x040
-#define XSDT_OFFSET		0x080
-#define MADT_OFFSET		0x100
-/*
- * The MADT consists of:
- *	44		Fixed Header
- *	8 * maxcpu	Processor Local APIC entries
- *	12		I/O APIC entry
- *	2 * 10		Interrupt Source Override entries
- *	6		Local APIC NMI entry
- */
-#define	MADT_SIZE		roundup2((44 + basl_ncpu*8 + 12 + 2*10 + 6), 0x100)
-#define	FADT_OFFSET		(MADT_OFFSET + MADT_SIZE)
-#define	FADT_SIZE		0x140
-#define	HPET_OFFSET		(FADT_OFFSET + FADT_SIZE)
-#define	HPET_SIZE		0x40
-#define	MCFG_OFFSET		(HPET_OFFSET + HPET_SIZE)
-#define	MCFG_SIZE		0x40
-#define	FACS_OFFSET		(MCFG_OFFSET + MCFG_SIZE)
-#define	FACS_SIZE		0x40
-#define TPM2_OFFSET		(FACS_OFFSET + FACS_SIZE)
-#define TPM2_SIZE		0x80
-#define	DSDT_OFFSET		(TPM2_OFFSET + TPM2_SIZE)
 
 #define	BHYVE_ASL_TEMPLATE	"bhyve.XXXXXXX"
 #define BHYVE_ASL_SUFFIX	".aml"
@@ -368,7 +326,7 @@ basl_end(struct basl_fio *in, struct basl_fio *out)
 }
 
 static int
-basl_load(struct vmctx *ctx, int fd, uint64_t off)
+basl_load(struct vmctx *ctx, int fd)
 {
 	struct stat sb;
 	void *addr;
@@ -387,15 +345,14 @@ basl_load(struct vmctx *ctx, int fd, uint64_t off)
 
 	uint8_t name[ACPI_NAMESEG_SIZE + 1] = { 0 };
 	memcpy(name, addr, sizeof(name) - 1 /* last char is '\0' */);
-	BASL_EXEC(
-	    basl_table_create(&table, ctx, name, BASL_TABLE_ALIGNMENT, off));
+	BASL_EXEC(basl_table_create(&table, ctx, name, BASL_TABLE_ALIGNMENT));
 	BASL_EXEC(basl_table_append_bytes(table, addr, sb.st_size));
 
 	return (0);
 }
 
 static int
-basl_compile(struct vmctx *ctx, int (*fwrite_section)(FILE *), uint64_t offset)
+basl_compile(struct vmctx *ctx, int (*fwrite_section)(FILE *))
 {
 	struct basl_fio io[2];
 	static char iaslbuf[3*MAXPATHLEN + 10];
@@ -429,7 +386,7 @@ basl_compile(struct vmctx *ctx, int (*fwrite_section)(FILE *), uint64_t offset)
 				 * Copy the aml output file into guest
 				 * memory at the specified location
 				 */
-				err = basl_load(ctx, io[1].fd, offset);
+				err = basl_load(ctx, io[1].fd);
 			}
 		}
 		basl_end(&io[0], &io[1]);
@@ -498,7 +455,7 @@ build_facs(struct vmctx *const ctx)
 	struct basl_table *facs;
 
 	BASL_EXEC(basl_table_create(&facs, ctx, ACPI_SIG_FACS,
-	    BASL_TABLE_ALIGNMENT_FACS, FACS_OFFSET));
+	    BASL_TABLE_ALIGNMENT_FACS));
 
 	/* Signature */
 	BASL_EXEC(
@@ -533,8 +490,8 @@ build_fadt(struct vmctx *const ctx)
 {
 	struct basl_table *fadt;
 
-	BASL_EXEC(basl_table_create(&fadt, ctx, ACPI_SIG_FADT,
-	    BASL_TABLE_ALIGNMENT, FADT_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&fadt, ctx, ACPI_SIG_FADT, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -684,8 +641,8 @@ build_hpet(struct vmctx *const ctx)
 {
 	struct basl_table *hpet;
 
-	BASL_EXEC(basl_table_create(&hpet, ctx, ACPI_SIG_HPET,
-	    BASL_TABLE_ALIGNMENT, HPET_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&hpet, ctx, ACPI_SIG_HPET, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -716,8 +673,8 @@ build_madt(struct vmctx *const ctx)
 {
 	struct basl_table *madt;
 
-	BASL_EXEC(basl_table_create(&madt, ctx, ACPI_SIG_MADT,
-	    BASL_TABLE_ALIGNMENT, MADT_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&madt, ctx, ACPI_SIG_MADT, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -815,8 +772,8 @@ build_mcfg(struct vmctx *const ctx)
 {
 	struct basl_table *mcfg;
 
-	BASL_EXEC(basl_table_create(&mcfg, ctx, ACPI_SIG_MCFG,
-	    BASL_TABLE_ALIGNMENT, MCFG_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&mcfg, ctx, ACPI_SIG_MCFG, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -849,7 +806,7 @@ build_rsdp(struct vmctx *const ctx)
 	struct basl_table *rsdp;
 
 	BASL_EXEC(basl_table_create(&rsdp, ctx, ACPI_RSDP_NAME,
-	    BASL_TABLE_ALIGNMENT, 0));
+	    BASL_TABLE_ALIGNMENT));
 
 	/* Signature */
 	BASL_EXEC(basl_table_append_bytes(rsdp, ACPI_SIG_RSDP,
@@ -880,8 +837,8 @@ build_rsdp(struct vmctx *const ctx)
 static int
 build_rsdt(struct vmctx *const ctx)
 {
-	BASL_EXEC(basl_table_create(&rsdt, ctx, ACPI_SIG_RSDT,
-	    BASL_TABLE_ALIGNMENT, RSDT_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&rsdt, ctx, ACPI_SIG_RSDT, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -897,8 +854,8 @@ build_tpm2(struct vmctx *const ctx)
 {
 	struct basl_table *tpm2;
 
-	BASL_EXEC(basl_table_create(&tpm2, ctx, ACPI_SIG_TPM2,
-	    BASL_TABLE_ALIGNMENT, TPM2_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&tpm2, ctx, ACPI_SIG_TPM2, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(
@@ -932,8 +889,8 @@ build_tpm2(struct vmctx *const ctx)
 static int
 build_xsdt(struct vmctx *const ctx)
 {
-	BASL_EXEC(basl_table_create(&xsdt, ctx, ACPI_SIG_XSDT,
-	    BASL_TABLE_ALIGNMENT, XSDT_OFFSET));
+	BASL_EXEC(
+	    basl_table_create(&xsdt, ctx, ACPI_SIG_XSDT, BASL_TABLE_ALIGNMENT));
 
 	/* Header */
 	BASL_EXEC(

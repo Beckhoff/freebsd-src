@@ -130,7 +130,16 @@ static int
 basl_finish_alloc()
 {
 	struct basl_table *table;
+	uint32_t off = 0;
 	STAILQ_FOREACH (table, &basl_tables, chain) {
+		table->off = roundup2(off, table->alignment);
+		off = table->off + table->len;
+		if (off <= table->off) {
+			warnx("%s: invalid table length 0x%8x @ offset 0x%8x",
+			    __func__, table->len, table->off);
+			return (EFAULT);
+		}
+
 		/*
 		 * Old guest bios versions search for ACPI tables in the guest
 		 * memory and install them as is. Therefore, copy the tables
@@ -522,8 +531,7 @@ basl_table_append_pointer(struct basl_table *const table,
 
 int
 basl_table_create(struct basl_table **const table, struct vmctx *ctx,
-    const uint8_t name[QEMU_FWCFG_MAX_NAME], const uint32_t alignment,
-    const uint32_t off)
+    const uint8_t name[QEMU_FWCFG_MAX_NAME], const uint32_t alignment)
 {
 	if (table == NULL) {
 		return (EINVAL);
@@ -542,7 +550,6 @@ basl_table_create(struct basl_table **const table, struct vmctx *ctx,
 	    "etc/acpi/%s", name);
 
 	new_table->alignment = alignment;
-	new_table->off = off;
 
 	STAILQ_INSERT_TAIL(&basl_tables, new_table, chain);
 
