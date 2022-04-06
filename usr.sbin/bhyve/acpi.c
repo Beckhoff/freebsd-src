@@ -118,7 +118,6 @@ __FBSDID("$FreeBSD$");
 static int basl_keep_temps;
 static int basl_verbose_iasl;
 static int basl_ncpu;
-static uint32_t basl_acpi_base = BHYVE_ACPI_BASE;
 static uint32_t hpet_capabilities;
 
 /*
@@ -172,32 +171,6 @@ acpi_tables_add_device(const struct acpi_device *const dev)
 	SLIST_INSERT_HEAD(&acpi_devices, entry, chain);
 
 	return (0);
-}
-
-static int
-basl_fwrite_rsdp(FILE *fp)
-{
-	EFPRINTF(fp, "/*\n");
-	EFPRINTF(fp, " * bhyve RSDP template\n");
-	EFPRINTF(fp, " */\n");
-	EFPRINTF(fp, "[0008]\t\tSignature : \"RSD PTR \"\n");
-	EFPRINTF(fp, "[0001]\t\tChecksum : 43\n");
-	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
-	EFPRINTF(fp, "[0001]\t\tRevision : 02\n");
-	EFPRINTF(fp, "[0004]\t\tRSDT Address : %08X\n",
-	    basl_acpi_base + RSDT_OFFSET);
-	EFPRINTF(fp, "[0004]\t\tLength : 00000024\n");
-	EFPRINTF(fp, "[0008]\t\tXSDT Address : 00000000%08X\n",
-	    basl_acpi_base + XSDT_OFFSET);
-	EFPRINTF(fp, "[0001]\t\tExtended Checksum : 00\n");
-	EFPRINTF(fp, "[0003]\t\tReserved : 000000\n");
-
-	EFFLUSH(fp);
-
-	return (0);
-
-err_exit:
-	return (errno);
 }
 
 /*
@@ -871,6 +844,40 @@ build_mcfg(struct vmctx *const ctx)
 }
 
 static int
+build_rsdp(struct vmctx *const ctx)
+{
+	struct basl_table *rsdp;
+
+	BASL_EXEC(basl_table_create(&rsdp, ctx, ACPI_RSDP_NAME,
+	    BASL_TABLE_ALIGNMENT, 0));
+
+	/* Signature */
+	BASL_EXEC(basl_table_append_bytes(rsdp, ACPI_SIG_RSDP,
+	    sizeof(ACPI_SIG_RSDP) - 1));
+	/* Checksum (patched by guest) */
+	BASL_EXEC(basl_table_append_checksum(rsdp, 0, 20));
+	/* OEM Id */
+	BASL_EXEC(basl_table_append_bytes(rsdp, BASL_OEM_ID, ACPI_OEM_ID_SIZE));
+	/* Revision */
+	BASL_EXEC(basl_table_append_int(rsdp, BASL_REVISION_RSDP, 1));
+	/* RSDT Address (patched by guest) */
+	BASL_EXEC(basl_table_append_pointer(rsdp, ACPI_SIG_RSDT,
+	    ACPI_RSDT_ENTRY_SIZE));
+	/* Length (patched by basl_finish) */
+	BASL_EXEC(basl_table_append_length(rsdp, sizeof(UINT32)));
+	/* XSDT Address (patched by guest) */
+	BASL_EXEC(basl_table_append_pointer(rsdp, ACPI_SIG_XSDT,
+	    ACPI_XSDT_ENTRY_SIZE));
+	/* Extended Checksum (patched by guest) */
+	BASL_EXEC(basl_table_append_checksum(rsdp, 0,
+	    BASL_TABLE_CHECKSUM_LEN_FULL_TABLE));
+	/* Reserved */
+	BASL_EXEC(basl_table_append_int(rsdp, 0, 3));
+
+	return (0);
+}
+
+static int
 build_rsdt(struct vmctx *const ctx)
 {
 	BASL_EXEC(basl_table_create(&rsdt, ctx, ACPI_SIG_RSDT,
@@ -974,7 +981,7 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	 * the first table pointed to by XSDT. For that reason, build it as
 	 * first table after XSDT.
 	 */
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_rsdp, 0));
+	BASL_EXEC(build_rsdp(ctx));
 	BASL_EXEC(build_rsdt(ctx));
 	BASL_EXEC(build_xsdt(ctx));
 	BASL_EXEC(build_fadt(ctx));
