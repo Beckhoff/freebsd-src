@@ -40,6 +40,64 @@ STAILQ_HEAD(basl_table_list, basl_table) basl_tables = STAILQ_HEAD_INITIALIZER(
 struct qemu_loader *basl_loader;
 
 static int
+basl_dump_table(const struct basl_table *const table, const int mem)
+{
+	const ACPI_TABLE_HEADER *const header = table->data;
+	const uint8_t *data;
+
+	if (!mem) {
+		data = table->data;
+	} else {
+		data = (uint8_t *)vm_map_gpa(table->ctx,
+		    BHYVE_ACPI_BASE + table->off, table->len);
+		if (data == NULL) {
+			return (ENOMEM);
+		}
+	}
+
+	printf("%c%c%c%c @ %8x (%s)\n\r", header->Signature[0],
+	    header->Signature[1], header->Signature[2], header->Signature[3],
+	    BHYVE_ACPI_BASE + table->off, mem ? "Memory" : "FwCfg");
+	for (uint32_t i = 0; i < table->len; i += 0x10) {
+		printf("%08x: ", i);
+		for (uint32_t n = 0; n < 0x10; ++n) {
+			if (table->len <= i + n) {
+				printf("   ");
+				continue;
+			}
+			printf("%02x ", data[i + n]);
+		}
+		printf("| ");
+		for (uint32_t n = 0; n < 0x10; ++n) {
+			if (table->len <= i + n) {
+				printf(" ");
+				continue;
+			}
+			const uint8_t c = data[i + n];
+			if (c < 0x20 || c >= 0x7F) {
+				printf(".");
+			} else {
+				printf("%c", c);
+			}
+		}
+		printf("\n\r");
+	}
+
+	return (0);
+}
+
+static int
+basl_dump(const int mem)
+{
+	struct basl_table *table;
+	STAILQ_FOREACH (table, &basl_tables, chain) {
+		BASL_EXEC(basl_dump_table(table, mem));
+	}
+
+	return (0);
+}
+
+static int
 basl_finish_alloc()
 {
 	struct basl_table *table;
