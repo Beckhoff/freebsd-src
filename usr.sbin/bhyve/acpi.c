@@ -809,8 +809,10 @@ basl_fwrite_dsdt(FILE *fp)
 	dsdt_line("/*");
 	dsdt_line(" * bhyve DSDT template");
 	dsdt_line(" */");
-	dsdt_line("DefinitionBlock (\"bhyve_dsdt.aml\", \"DSDT\", 2,"
-		 "\"BHYVE \", \"BVDSDT  \", 0x00000001)");
+	dsdt_line("DefinitionBlock (\"bhyve_dsdt.aml\", \"%s\", 0x%02x,"
+		 "\"%s\", \"%s\", 0x%08x)",
+	    ACPI_SIG_DSDT, BASL_REVISION_DSDT, BASL_OEM_ID,
+	    BASL_OEM_TABLE_ID_DSDT, BASL_OEM_REVISION_DSDT);
 	dsdt_line("{");
 	dsdt_line("  Name (_S5, Package ()");
 	dsdt_line("  {");
@@ -1034,6 +1036,14 @@ basl_make_templates(void)
 	return (err);
 }
 
+static int
+build_dsdt(struct vmctx *const ctx)
+{
+	BASL_EXEC(basl_compile(ctx, basl_fwrite_dsdt));
+
+	return (0);
+}
+
 int
 acpi_build(struct vmctx *ctx, int ncpu)
 {
@@ -1078,7 +1088,7 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	if (lpc_tpm2_in_use()) {
 		BASL_EXEC(basl_compile(ctx, basl_fwrite_tpm2, TPM2_OFFSET));
 	}
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_dsdt, DSDT_OFFSET));
+	BASL_EXEC(build_dsdt(ctx));
 
 	BASL_EXEC(basl_finish());
 
