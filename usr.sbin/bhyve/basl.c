@@ -177,6 +177,18 @@ basl_table_append_bytes(struct basl_table *const table, const void *const bytes,
 }
 
 int
+basl_table_append_int(struct basl_table *const table, const uint64_t val,
+    const uint8_t size)
+{
+	if (size > sizeof(val)) {
+		return (EINVAL);
+	}
+
+	const uint64_t val_le = htole64(val);
+	return (basl_table_append_bytes(table, &val_le, size));
+}
+
+int
 basl_table_create(struct basl_table **const table, struct vmctx *ctx,
     const uint8_t name[QEMU_FWCFG_MAX_NAME], const uint32_t alignment,
     const uint32_t off)
