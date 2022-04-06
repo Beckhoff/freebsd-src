@@ -111,7 +111,9 @@ __FBSDID("$FreeBSD$");
 #define BHYVE_ASL_SUFFIX	".aml"
 #define BHYVE_ASL_COMPILER	"/usr/sbin/iasl"
 
+#define BHYVE_ADDRESS_IOAPIC 0xFEC00000
 #define BHYVE_ADDRESS_HPET 0xFED00000
+#define BHYVE_ADDRESS_LAPIC 0xFEE00000
 
 static int basl_keep_temps;
 static int basl_verbose_iasl;
@@ -272,94 +274,6 @@ basl_fwrite_xsdt(FILE *fp)
 		EFPRINTF(fp, "[0004]\t\tACPI Table Address %u : 00000000%08X\n",
 		    table++, basl_acpi_base + TPM2_OFFSET);
 	}
-
-	EFFLUSH(fp);
-
-	return (0);
-
-err_exit:
-	return (errno);
-}
-
-static int
-basl_fwrite_madt(FILE *fp)
-{
-	int i;
-
-	EFPRINTF(fp, "/*\n");
-	EFPRINTF(fp, " * bhyve MADT template\n");
-	EFPRINTF(fp, " */\n");
-	EFPRINTF(fp, "[0004]\t\tSignature : \"APIC\"\n");
-	EFPRINTF(fp, "[0004]\t\tTable Length : 00000000\n");
-	EFPRINTF(fp, "[0001]\t\tRevision : 01\n");
-	EFPRINTF(fp, "[0001]\t\tChecksum : 00\n");
-	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
-	EFPRINTF(fp, "[0008]\t\tOem Table ID : \"BVMADT  \"\n");
-	EFPRINTF(fp, "[0004]\t\tOem Revision : 00000001\n");
-
-	/* iasl will fill in the compiler ID/revision fields */
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler ID : \"xxxx\"\n");
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler Revision : 00000000\n");
-	EFPRINTF(fp, "\n");
-
-	EFPRINTF(fp, "[0004]\t\tLocal Apic Address : FEE00000\n");
-	EFPRINTF(fp, "[0004]\t\tFlags (decoded below) : 00000001\n");
-	EFPRINTF(fp, "\t\t\tPC-AT Compatibility : 1\n");
-	EFPRINTF(fp, "\n");
-
-	/* Add a Processor Local APIC entry for each CPU */
-	for (i = 0; i < basl_ncpu; i++) {
-		EFPRINTF(fp, "[0001]\t\tSubtable Type : 00\n");
-		EFPRINTF(fp, "[0001]\t\tLength : 08\n");
-		/* iasl expects hex values for the proc and apic id's */
-		EFPRINTF(fp, "[0001]\t\tProcessor ID : %02x\n", i);
-		EFPRINTF(fp, "[0001]\t\tLocal Apic ID : %02x\n", i);
-		EFPRINTF(fp, "[0004]\t\tFlags (decoded below) : 00000001\n");
-		EFPRINTF(fp, "\t\t\tProcessor Enabled : 1\n");
-		EFPRINTF(fp, "\t\t\tRuntime Online Capable : 0\n");
-		EFPRINTF(fp, "\n");
-	}
-
-	/* Always a single IOAPIC entry, with ID 0 */
-	EFPRINTF(fp, "[0001]\t\tSubtable Type : 01\n");
-	EFPRINTF(fp, "[0001]\t\tLength : 0C\n");
-	/* iasl expects a hex value for the i/o apic id */
-	EFPRINTF(fp, "[0001]\t\tI/O Apic ID : %02x\n", 0);
-	EFPRINTF(fp, "[0001]\t\tReserved : 00\n");
-	EFPRINTF(fp, "[0004]\t\tAddress : fec00000\n");
-	EFPRINTF(fp, "[0004]\t\tInterrupt : 00000000\n");
-	EFPRINTF(fp, "\n");
-
-	/* Legacy IRQ0 is connected to pin 2 of the IOAPIC */
-	EFPRINTF(fp, "[0001]\t\tSubtable Type : 02\n");
-	EFPRINTF(fp, "[0001]\t\tLength : 0A\n");
-	EFPRINTF(fp, "[0001]\t\tBus : 00\n");
-	EFPRINTF(fp, "[0001]\t\tSource : 00\n");
-	EFPRINTF(fp, "[0004]\t\tInterrupt : 00000002\n");
-	EFPRINTF(fp, "[0002]\t\tFlags (decoded below) : 0005\n");
-	EFPRINTF(fp, "\t\t\tPolarity : 1\n");
-	EFPRINTF(fp, "\t\t\tTrigger Mode : 1\n");
-	EFPRINTF(fp, "\n");
-
-	EFPRINTF(fp, "[0001]\t\tSubtable Type : 02\n");
-	EFPRINTF(fp, "[0001]\t\tLength : 0A\n");
-	EFPRINTF(fp, "[0001]\t\tBus : 00\n");
-	EFPRINTF(fp, "[0001]\t\tSource : %02X\n", SCI_INT);
-	EFPRINTF(fp, "[0004]\t\tInterrupt : %08X\n", SCI_INT);
-	EFPRINTF(fp, "[0002]\t\tFlags (decoded below) : 0000\n");
-	EFPRINTF(fp, "\t\t\tPolarity : 3\n");
-	EFPRINTF(fp, "\t\t\tTrigger Mode : 3\n");
-	EFPRINTF(fp, "\n");
-
-	/* Local APIC NMI is connected to LINT 1 on all CPUs */
-	EFPRINTF(fp, "[0001]\t\tSubtable Type : 04\n");
-	EFPRINTF(fp, "[0001]\t\tLength : 06\n");
-	EFPRINTF(fp, "[0001]\t\tProcessor ID : FF\n");
-	EFPRINTF(fp, "[0002]\t\tFlags (decoded below) : 0005\n");
-	EFPRINTF(fp, "\t\t\tPolarity : 1\n");
-	EFPRINTF(fp, "\t\t\tTrigger Mode : 1\n");
-	EFPRINTF(fp, "[0001]\t\tInterrupt Input LINT : 01\n");
-	EFPRINTF(fp, "\n");
 
 	EFFLUSH(fp);
 
@@ -969,6 +883,100 @@ build_hpet(struct vmctx *const ctx)
 }
 
 static int
+build_madt(struct vmctx *const ctx)
+{
+	struct basl_table *madt;
+
+	BASL_EXEC(basl_table_create(&madt, ctx, ACPI_SIG_MADT,
+	    BASL_TABLE_ALIGNMENT, MADT_OFFSET));
+
+	/* Header */
+	BASL_EXEC(
+	    basl_table_append_header(madt, ACPI_SIG_MADT, BASL_REVISION_MADT,
+		BASL_OEM_ID, BASL_OEM_TABLE_ID_MADT, BASL_OEM_REVISION_MADT));
+	/* Local Apic Address */
+	BASL_EXEC(basl_table_append_int(madt, BHYVE_ADDRESS_LAPIC, 4));
+	/* Flags */
+	BASL_EXEC(basl_table_append_int(madt, ACPI_MADT_PCAT_COMPAT, 4));
+
+	/* Local APIC for each CPU */
+	for (int i = 0; i < basl_ncpu; ++i) {
+		/* Type */
+		BASL_EXEC(
+		    basl_table_append_int(madt, ACPI_MADT_TYPE_LOCAL_APIC, 1));
+		/* Length */
+		BASL_EXEC(basl_table_append_int(madt, 8, 1));
+		/* ACPI Processor UID */
+		BASL_EXEC(basl_table_append_int(madt, i, 1));
+		/* APIC ID */
+		BASL_EXEC(basl_table_append_int(madt, i, 1));
+		/* Flags */
+		BASL_EXEC(basl_table_append_int(madt, ACPI_MADT_ENABLED, 4));
+	}
+
+	/* I/O APIC */
+	/* Type */
+	BASL_EXEC(basl_table_append_int(madt, ACPI_MADT_TYPE_IO_APIC, 1));
+	/* Length */
+	BASL_EXEC(basl_table_append_int(madt, 12, 1));
+	/* I/O APIC ID */
+	BASL_EXEC(basl_table_append_int(madt, 0, 1));
+	/* Reserved */
+	BASL_EXEC(basl_table_append_int(madt, 0, 1));
+	/* I/O APIC Address */
+	BASL_EXEC(basl_table_append_int(madt, BHYVE_ADDRESS_IOAPIC, 4));
+	/* Interrupt Base */
+	BASL_EXEC(basl_table_append_int(madt, 0, 4));
+
+	/* Legacy IRQ0 is connected to pin 2 of the I/O APIC */
+	/* Type */
+	BASL_EXEC(
+	    basl_table_append_int(madt, ACPI_MADT_TYPE_INTERRUPT_OVERRIDE, 1));
+	/* Length */
+	BASL_EXEC(basl_table_append_int(madt, 10, 1));
+	/* Bus */
+	BASL_EXEC(basl_table_append_int(madt, 0, 1));
+	/* Source */
+	BASL_EXEC(basl_table_append_int(madt, 0, 1));
+	/* Interrupt */
+	BASL_EXEC(basl_table_append_int(madt, 2, 4));
+	/* Flags */
+	BASL_EXEC(basl_table_append_int(madt,
+	    ACPI_MADT_POLARITY_ACTIVE_LOW | ACPI_MADT_TRIGGER_LEVEL, 2));
+
+	/* Type */
+	BASL_EXEC(
+	    basl_table_append_int(madt, ACPI_MADT_TYPE_INTERRUPT_OVERRIDE, 1));
+	/* Length */
+	BASL_EXEC(basl_table_append_int(madt, 10, 1));
+	/* Bus */
+	BASL_EXEC(basl_table_append_int(madt, 0, 1));
+	/* Source */
+	BASL_EXEC(basl_table_append_int(madt, SCI_INT, 1));
+	/* Interrupt */
+	BASL_EXEC(basl_table_append_int(madt, SCI_INT, 4));
+	/* Flags */
+	BASL_EXEC(basl_table_append_int(madt,
+	    ACPI_MADT_POLARITY_ACTIVE_LOW | ACPI_MADT_TRIGGER_LEVEL, 2));
+
+	/* Local APIC NMI is conntected to LINT 1 on all CPUs */
+	/* Type */
+	BASL_EXEC(
+	    basl_table_append_int(madt, ACPI_MADT_TYPE_LOCAL_APIC_NMI, 1));
+	/* Length */
+	BASL_EXEC(basl_table_append_int(madt, 6, 1));
+	/* Processor UID */
+	BASL_EXEC(basl_table_append_int(madt, 0xFF, 1));
+	/* Flags */
+	BASL_EXEC(basl_table_append_int(madt,
+	    ACPI_MADT_POLARITY_ACTIVE_HIGH | ACPI_MADT_TRIGGER_EDGE, 2));
+	/* Local APIC LINT */
+	BASL_EXEC(basl_table_append_int(madt, 1, 1));
+
+	return (0);
+}
+
+static int
 build_mcfg(struct vmctx *const ctx)
 {
 	struct basl_table *mcfg;
@@ -1064,8 +1072,8 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_rsdp, 0));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_rsdt, RSDT_OFFSET));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_xsdt, XSDT_OFFSET));
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_madt, MADT_OFFSET));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_fadt, FADT_OFFSET));
+	BASL_EXEC(build_madt(ctx));
 	BASL_EXEC(build_hpet(ctx));
 	BASL_EXEC(build_mcfg(ctx));
 	BASL_EXEC(build_facs(ctx));
