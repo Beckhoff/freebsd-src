@@ -37,6 +37,15 @@ struct basl_table {
 STAILQ_HEAD(basl_table_list, basl_table) basl_tables = STAILQ_HEAD_INITIALIZER(
     basl_tables);
 
+struct basl_table_length {
+	STAILQ_ENTRY(basl_table_length) chain;
+	struct basl_table *table;
+	uint32_t off;
+	uint8_t size;
+};
+STAILQ_HEAD(basl_table_length_list,
+    basl_table_length) basl_lengths = STAILQ_HEAD_INITIALIZER(basl_lengths);
+
 struct qemu_loader *basl_loader;
 
 static int
@@ -128,6 +137,21 @@ basl_finish_alloc()
 	return (0);
 }
 
+static int
+basl_finish_set_length()
+{
+	struct basl_table_length *length;
+	STAILQ_FOREACH (length, &basl_lengths, chain) {
+		const struct basl_table *const table = length->table;
+
+		uint32_t len_le = htole32(table->len);
+
+		memcpy(table->data + length->off, &len_le, length->size);
+	}
+
+	return (0);
+}
+
 int
 basl_finish()
 {
@@ -136,6 +160,7 @@ basl_finish()
 		return (EINVAL);
 	}
 
+	BASL_EXEC(basl_finish_set_length());
 	BASL_EXEC(basl_finish_alloc());
 	BASL_EXEC(qemu_loader_finish(basl_loader));
 
@@ -146,6 +171,26 @@ int
 basl_init()
 {
 	return (qemu_loader_create(&basl_loader, QEMU_FWCFG_FILE_TABLE_LOADER));
+}
+
+static int
+basl_table_add_length(struct basl_table *const table, const uint32_t off,
+    const uint8_t size)
+{
+	struct basl_table_length *const length = calloc(1,
+	    sizeof(struct basl_table_length));
+	if (length == NULL) {
+		warnx("%s: failed to allocate length", __func__);
+		return (ENOMEM);
+	}
+
+	length->table = table;
+	length->off = off;
+	length->size = size;
+
+	STAILQ_INSERT_TAIL(&basl_lengths, length, chain);
+
+	return (0);
 }
 
 int
@@ -202,6 +247,19 @@ basl_table_append_int(struct basl_table *const table, const uint64_t val,
 
 	const uint64_t val_le = htole64(val);
 	return (basl_table_append_bytes(table, &val_le, size));
+}
+
+int
+basl_table_append_length(struct basl_table *const table, const uint8_t size)
+{
+	if (table == NULL || size > sizeof(table->len)) {
+		return (EINVAL);
+	}
+
+	BASL_EXEC(basl_table_add_length(table, table->len, size));
+	BASL_EXEC(basl_table_append_int(table, 0, size));
+
+	return (0);
 }
 
 int
