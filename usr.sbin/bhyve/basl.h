@@ -20,6 +20,10 @@
 
 #define BHYVE_ACPI_BASE 0xf2400
 
+#define BASL_COMPILER_ID "BASL"
+
+#define BASL_COMPILER_REVISION 20220504
+
 #define BASL_TABLE_ALIGNMENT 0x10
 #define BASL_TABLE_ALIGNMENT_FACS 0x40
 
@@ -47,6 +51,10 @@ int basl_table_append_checksum(struct basl_table *table, uint32_t start,
 int basl_table_append_gas(struct basl_table *table, uint8_t space_id,
     uint8_t bit_width, uint8_t bit_offset, uint8_t access_width,
     uint64_t address);
+int basl_table_append_header(struct basl_table *table,
+    const uint8_t sign[ACPI_NAMESEG_SIZE], uint8_t rev,
+    const uint8_t oem_id[ACPI_OEM_ID_SIZE],
+    const uint8_t oem_table_id[ACPI_OEM_TABLE_ID_SIZE], uint32_t oem_revision);
 int basl_table_append_int(struct basl_table *table, uint64_t val, uint8_t size);
 int basl_table_append_length(struct basl_table *table, uint8_t size);
 int basl_table_append_pointer(struct basl_table *table,
