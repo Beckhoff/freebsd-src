@@ -56,6 +56,16 @@ struct basl_table_length {
 STAILQ_HEAD(basl_table_length_list,
     basl_table_length) basl_lengths = STAILQ_HEAD_INITIALIZER(basl_lengths);
 
+struct basl_table_pointer {
+	STAILQ_ENTRY(basl_table_pointer) chain;
+	struct basl_table *table;
+	uint8_t src_sign[ACPI_NAMESEG_SIZE];
+	uint32_t off;
+	uint8_t size;
+};
+STAILQ_HEAD(basl_table_pointer_list,
+    basl_table_pointer) basl_pointers = STAILQ_HEAD_INITIALIZER(basl_pointers);
+
 struct qemu_loader *basl_loader;
 
 static int
@@ -201,6 +211,78 @@ basl_finish_patch_checksums()
 	return (0);
 }
 
+static struct basl_table *
+basl_get_table_by_sign(const uint8_t sign[ACPI_NAMESEG_SIZE])
+{
+	struct basl_table *table;
+	STAILQ_FOREACH (table, &basl_tables, chain) {
+		const ACPI_TABLE_HEADER *const header =
+		    (const ACPI_TABLE_HEADER *)table->data;
+		if (strncmp(header->Signature, sign,
+			sizeof(header->Signature)) == 0) {
+			return (table);
+		}
+	}
+
+	warnx("%s: %c%c%c%c not found", __func__, sign[0], sign[1], sign[2],
+	    sign[3]);
+	return (NULL);
+}
+
+static int
+basl_finish_patch_pointers()
+{
+	struct basl_table_pointer *pointer;
+	STAILQ_FOREACH (pointer, &basl_pointers, chain) {
+		const struct basl_table *const table = pointer->table;
+		const struct basl_table *const src_table =
+		    basl_get_table_by_sign(pointer->src_sign);
+		if (src_table == NULL) {
+			warnx("%s: could not find ACPI table %c%c%c%c",
+			    __func__, pointer->src_sign[0],
+			    pointer->src_sign[1], pointer->src_sign[2],
+			    pointer->src_sign[3]);
+			return (EFAULT);
+		}
+
+		/*
+		 * Old guest bios versions search for ACPI tables in the guest
+		 * memory and install them as is. Therefore, patch the pointers
+		 * in the guest memory copies manually.
+		 */
+		const uint64_t gpa = BHYVE_ACPI_BASE + table->off;
+		if (gpa < BHYVE_ACPI_BASE) {
+			warnx("%s: table offset of 0x%8x is too large",
+			    __func__, table->off);
+			return (EFAULT);
+		}
+
+		uint8_t *const gva = (uint8_t *)vm_map_gpa(table->ctx, gpa,
+		    table->len);
+		if (gva == NULL) {
+			warnx("%s: could not map gpa [ 0x%16lx, 0x%16lx ]",
+			    __func__, gpa, gpa + table->len);
+			return (ENOMEM);
+		}
+
+		uint64_t val_le = 0;
+		memcpy(&val_le, gva + pointer->off, pointer->size);
+		uint64_t val = le64toh(val_le);
+
+		val += BHYVE_ACPI_BASE + src_table->off;
+
+		val_le = htole64(val);
+		memcpy(gva + pointer->off, &val_le, pointer->size);
+
+		/* Cause guest bios to patch the pointer. */
+		BASL_EXEC(
+		    qemu_loader_add_pointer(basl_loader, table->fwcfg_name,
+			src_table->fwcfg_name, pointer->off, pointer->size));
+	}
+
+	return (0);
+}
+
 static int
 basl_finish_set_length()
 {
@@ -226,6 +308,7 @@ basl_finish()
 
 	BASL_EXEC(basl_finish_set_length());
 	BASL_EXEC(basl_finish_alloc());
+	BASL_EXEC(basl_finish_patch_pointers());
 	BASL_EXEC(basl_finish_patch_checksums());
 	BASL_EXEC(qemu_loader_finish(basl_loader));
 
@@ -275,6 +358,28 @@ basl_table_add_length(struct basl_table *const table, const uint32_t off,
 	length->size = size;
 
 	STAILQ_INSERT_TAIL(&basl_lengths, length, chain);
+
+	return (0);
+}
+
+static int
+basl_table_add_pointer(struct basl_table *const table,
+    const uint8_t src_sign[ACPI_NAMESEG_SIZE], const uint32_t off,
+    const uint8_t size)
+{
+	struct basl_table_pointer *const pointer = calloc(1,
+	    sizeof(struct basl_table_pointer));
+	if (pointer == NULL) {
+		warnx("%s: failed to allocate pointer", __func__);
+		return (ENOMEM);
+	}
+
+	pointer->table = table;
+	memcpy(pointer->src_sign, src_sign, sizeof(pointer->src_sign));
+	pointer->off = off;
+	pointer->size = size;
+
+	STAILQ_INSERT_TAIL(&basl_pointers, pointer, chain);
 
 	return (0);
 }
@@ -357,6 +462,20 @@ basl_table_append_length(struct basl_table *const table, const uint8_t size)
 	}
 
 	BASL_EXEC(basl_table_add_length(table, table->len, size));
+	BASL_EXEC(basl_table_append_int(table, 0, size));
+
+	return (0);
+}
+
+int
+basl_table_append_pointer(struct basl_table *const table,
+    const uint8_t src_sign[ACPI_NAMESEG_SIZE], const uint8_t size)
+{
+	if (table == NULL || size > sizeof(UINT64)) {
+		return (EINVAL);
+	}
+
+	BASL_EXEC(basl_table_add_pointer(table, src_sign, table->len, size));
 	BASL_EXEC(basl_table_append_int(table, 0, size));
 
 	return (0);
