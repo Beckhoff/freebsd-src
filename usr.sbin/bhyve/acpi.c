@@ -660,35 +660,6 @@ err_exit:
 	return (errno);
 }
 
-static int
-basl_fwrite_facs(FILE *fp)
-{
-	EFPRINTF(fp, "/*\n");
-	EFPRINTF(fp, " * bhyve FACS template\n");
-	EFPRINTF(fp, " */\n");
-	EFPRINTF(fp, "[0004]\t\tSignature : \"FACS\"\n");
-	EFPRINTF(fp, "[0004]\t\tLength : 00000040\n");
-	EFPRINTF(fp, "[0004]\t\tHardware Signature : 00000000\n");
-	EFPRINTF(fp, "[0004]\t\t32 Firmware Waking Vector : 00000000\n");
-	EFPRINTF(fp, "[0004]\t\tGlobal Lock : 00000000\n");
-	EFPRINTF(fp, "[0004]\t\tFlags (decoded below) : 00000000\n");
-	EFPRINTF(fp, "\t\t\tS4BIOS Support Present : 0\n");
-	EFPRINTF(fp, "\t\t\t64-bit Wake Supported (V2) : 0\n");
-	EFPRINTF(fp,
-	    "[0008]\t\t64 Firmware Waking Vector : 0000000000000000\n");
-	EFPRINTF(fp, "[0001]\t\tVersion : 02\n");
-	EFPRINTF(fp, "[0003]\t\tReserved : 000000\n");
-	EFPRINTF(fp, "[0004]\t\tOspmFlags (decoded below) : 00000000\n");
-	EFPRINTF(fp, "\t\t\t64-bit Wake Env Required (V2) : 0\n");
-
-	EFFLUSH(fp);
-
-	return (0);
-	
-err_exit:
-	return (errno);
-}
-
 /*
  * Helper routines for writing to the DSDT from other modules.
  */
@@ -1009,6 +980,42 @@ build_dsdt(struct vmctx *const ctx)
 }
 
 static int
+build_facs(struct vmctx *const ctx)
+{
+	struct basl_table *facs;
+
+	BASL_EXEC(basl_table_create(&facs, ctx, ACPI_SIG_FACS,
+	    BASL_TABLE_ALIGNMENT_FACS, FACS_OFFSET));
+
+	/* Signature */
+	BASL_EXEC(
+	    basl_table_append_bytes(facs, ACPI_SIG_FACS, ACPI_NAMESEG_SIZE));
+	/* Length */
+	BASL_EXEC(basl_table_append_length(facs, 4));
+	/* Hardware Signature */
+	BASL_EXEC(basl_table_append_int(facs, 0, 4));
+	/* Firmware Waking Vector */
+	BASL_EXEC(basl_table_append_int(facs, 0, 4));
+	/* Global Lock */
+	BASL_EXEC(basl_table_append_int(facs, 0, 4));
+	/* Flags */
+	BASL_EXEC(basl_table_append_int(facs, 0, 4));
+	/* Extended Firmware Waking Vector */
+	BASL_EXEC(basl_table_append_int(facs, 0, 8));
+	/* Version */
+	BASL_EXEC(basl_table_append_int(facs, 2, 1));
+	/* Reserved */
+	BASL_EXEC(basl_table_append_int(facs, 0, 3));
+	/* OSPM Flags */
+	BASL_EXEC(basl_table_append_int(facs, 0, 4));
+	/* Reserved */
+	const uint8_t reserved[24] = { 0 };
+	BASL_EXEC(basl_table_append_bytes(facs, reserved, 24));
+
+	return (0);
+}
+
+static int
 build_tpm2(struct vmctx *const ctx)
 {
 	struct basl_table *tpm2;
@@ -1080,7 +1087,7 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_fadt, FADT_OFFSET));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_hpet, HPET_OFFSET));
 	BASL_EXEC(basl_compile(ctx, basl_fwrite_mcfg, MCFG_OFFSET));
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_facs, FACS_OFFSET));
+	BASL_EXEC(build_facs(ctx));
 	if (lpc_tpm2_in_use()) {
 		BASL_EXEC(build_tpm2(ctx));
 	}
