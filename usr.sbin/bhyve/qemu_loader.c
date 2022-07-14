@@ -99,7 +99,7 @@ qemu_loader_alloc(struct qemu_loader *const loader,
 	 * For that reason, ALLOC should be scheduled in front of any other
 	 * commands.
 	 */
-	STAILQ_INSERT_TAIL(&loader->list, element, chain);
+	STAILQ_INSERT_HEAD(&loader->list, element, chain);
 
 	return (0);
 }
