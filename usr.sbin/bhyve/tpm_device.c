@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
- * Copyright (c) 2021 Beckhoff Automation GmbH & Co. KG
+ * Copyright (c) 2021 - 2022 Beckhoff Automation GmbH & Co. KG
  * Author: Corvin Köhne <c.koehne@beckhoff.com>
  */
 
@@ -19,15 +19,20 @@ __FBSDID("$FreeBSD$");
 #include <vmmapi.h>
 
 #include "acpi.h"
-#include "tpm2_device_priv.h"
+#include "tpm_device_priv.h"
 
-#define TPM2_ACPI_DEVICE_NAME "TPM"
-#define TPM2_ACPI_HARDWARE_ID "MSFT0101"
+#define TPM_ACPI_DEVICE_NAME "TPM"
+#define TPM_ACPI_HARDWARE_ID "MSFT0101"
 
-SET_DECLARE(tpm2_device_emul_set, struct tpm2_device_emul);
+SET_DECLARE(tpm_device_emul_set, struct tpm_device_emul);
+
+static const struct acpi_device_emul tpm_acpi_device_emul = {
+	.name = TPM_ACPI_DEVICE_NAME,
+	.hid = TPM_ACPI_HARDWARE_ID,
+};
 
 int
-tpm2_device_create(struct tpm2_device **const new_dev,
+tpm_device_create(struct tpm_device **const new_dev,
     struct vmctx *const vm_ctx, nvlist_t *const nvl)
 {
 	if (new_dev == NULL || vm_ctx == NULL) {
@@ -45,39 +50,39 @@ tpm2_device_create(struct tpm2_device **const new_dev,
 		return (EINVAL);
 	}
 
-	struct tpm2_device *const dev = calloc(1, sizeof(*dev));
+	struct tpm_device *const dev = calloc(1, sizeof(*dev));
 	if (dev == NULL) {
 		return (ENOMEM);
 	}
 
 	int error = acpi_device_create(&dev->acpi_dev, dev, vm_ctx,
-	    &tpm2_acpi_device_emul);
+	    &tpm_acpi_device_emul);
 	if (error) {
-		tpm2_device_destroy(dev);
+		tpm_device_destroy(dev);
 		return (error);
 	}
 
 	dev->control_address = 0;
 
-	const char *tpm2_type = get_config_value_node(nvl, "type");
-	struct tpm2_device_emul **ppemul;
-	SET_FOREACH(ppemul, tpm2_device_emul_set)
+	const char *tpm_type = get_config_value_node(nvl, "type");
+	struct tpm_device_emul **ppemul;
+	SET_FOREACH(ppemul, tpm_device_emul_set)
 	{
-		struct tpm2_device_emul *const pemul = *ppemul;
-		if (strcmp(tpm2_type, pemul->name))
+		struct tpm_device_emul *const pemul = *ppemul;
+		if (strcmp(tpm_type, pemul->name))
 			continue;
 		dev->emul = pemul;
 		break;
 	}
 	if (dev->emul == NULL) {
-		tpm2_device_destroy(dev);
+		tpm_device_destroy(dev);
 		return (EINVAL);
 	}
 
 	if (dev->emul->init) {
 		error = dev->emul->init(dev, vm_ctx, nvl);
 		if (error) {
-			tpm2_device_destroy(dev);
+			tpm_device_destroy(dev);
 			return (error);
 		}
 	}
@@ -88,7 +93,7 @@ tpm2_device_create(struct tpm2_device **const new_dev,
 }
 
 void
-tpm2_device_destroy(struct tpm2_device *const dev)
+tpm_device_destroy(struct tpm_device *const dev)
 {
 	if (dev == NULL) {
 		return;
@@ -102,13 +107,13 @@ tpm2_device_destroy(struct tpm2_device *const dev)
 }
 
 vm_paddr_t
-_tpm2_device_get_control_address(const struct tpm2_device *const dev)
+_tpm_device_get_control_address(const struct tpm_device *const dev)
 {
 	return (dev->control_address);
 }
 
 vm_paddr_t
-tpm2_device_get_control_address(const struct tpm2_device *const dev)
+tpm_device_get_control_address(const struct tpm_device *const dev)
 {
 	if (dev == NULL || dev->emul == NULL) {
 		return (0);
@@ -118,11 +123,11 @@ tpm2_device_get_control_address(const struct tpm2_device *const dev)
 		return dev->emul->get_control_address(dev);
 	}
 
-	return _tpm2_device_get_control_address(dev);
+	return _tpm_device_get_control_address(dev);
 }
 
 int
-_tpm2_device_set_control_address(struct tpm2_device *const dev,
+_tpm_device_set_control_address(struct tpm_device *const dev,
     const vm_paddr_t control_address)
 {
 	dev->control_address = control_address;
@@ -131,7 +136,7 @@ _tpm2_device_set_control_address(struct tpm2_device *const dev,
 }
 
 int
-tpm2_device_set_control_address(struct tpm2_device *const dev,
+tpm_device_set_control_address(struct tpm_device *const dev,
     const vm_paddr_t control_address)
 {
 	if (dev == NULL || dev->emul == NULL) {
@@ -142,5 +147,5 @@ tpm2_device_set_control_address(struct tpm2_device *const dev,
 		dev->emul->set_control_address(dev, control_address);
 	}
 
-	return _tpm2_device_set_control_address(dev, control_address);
+	return _tpm_device_set_control_address(dev, control_address);
 }

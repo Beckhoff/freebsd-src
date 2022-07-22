@@ -792,7 +792,36 @@ build_spcr(struct vmctx *const ctx)
 static int
 build_tpm2(struct vmctx *const ctx)
 {
-	BASL_EXEC(basl_compile(ctx, basl_fwrite_tpm2));
+	struct basl_table *tpm2;
+
+	BASL_EXEC(
+	    basl_table_create(&tpm2, ctx, ACPI_SIG_TPM2, BASL_TABLE_ALIGNMENT));
+
+	/* Header */
+	BASL_EXEC(
+	    basl_table_append_header(tpm2, ACPI_SIG_TPM2, BASL_REVISION_TPM2,
+		BASL_OEM_ID, BASL_OEM_TABLE_ID_TPM2, BASL_OEM_REVISION_TPM2));
+	/* Platform Class */
+	BASL_EXEC(basl_table_append_int(tpm2, 0, 2));
+	/* Reserved */
+	BASL_EXEC(basl_table_append_int(tpm2, 0, 2));
+	/* Control Address */
+	BASL_EXEC(
+	    basl_table_append_int(tpm2, lpc_tpm_get_control_address(), 8));
+	/* Start Method */
+	BASL_EXEC(basl_table_append_int(tpm2, 7, 4));
+	/* Start Method Specific Parameters */
+	uint8_t parameters[12] = { 0 };
+	BASL_EXEC(basl_table_append_bytes(tpm2, parameters, 12));
+	/* Log Area Minimum Length */
+	BASL_EXEC(basl_table_append_int(tpm2, 0, 4));
+	/* Log Area Start Address */
+	BASL_EXEC(basl_table_append_int(tpm2, 0, 8));
+
+	BASL_EXEC(basl_table_append_pointer(rsdt, ACPI_SIG_TPM2,
+	    ACPI_RSDT_ENTRY_SIZE));
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_TPM2,
+	    ACPI_XSDT_ENTRY_SIZE));
 
 	return (0);
 }
@@ -856,7 +885,7 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	BASL_EXEC(build_facs(ctx));
 	BASL_EXEC(build_spcr(ctx));
 
-	if (lpc_tpm2_in_use()) {
+	if (lpc_tpm_in_use()) {
 		BASL_EXEC(build_tpm2(ctx));
 	}
 

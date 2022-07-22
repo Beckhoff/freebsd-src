@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include "pci_lpc.h"
 #include "pci_passthru.h"
 #include "pctestdev.h"
-#include "tpm2_device.h"
+#include "tpm_device.h"
 #include "uart_emul.h"
 
 #define	IO_ICU1		0x20
@@ -71,7 +71,7 @@ SYSRES_IO(ELCR_PORT, 2);
 SYSRES_IO(NMISC_PORT, 1);
 
 static struct pci_devinst *lpc_bridge;
-static struct tpm2_device *lpc_tpm2;
+static struct tpm_device *lpc_tpm;
 
 #define	LPC_UART_NUM	4
 static struct lpc_uart_softc {
@@ -99,7 +99,7 @@ lpc_device_parse(const char *opts)
 {
 	int unit, error;
 	char *str, *cpy, *lpcdev, *node_name;
-	const char *romfile, *varfile, *tpm2_type;
+	const char *romfile, *varfile, *tpm_type;
 
 	error = -1;
 	str = cpy = strdup(opts);
@@ -131,11 +131,11 @@ lpc_device_parse(const char *opts)
 			goto done;
 		}
 		if (strcasecmp(lpcdev, "tpm2") == 0) {
-			tpm2_type = strsep(&str, ",");
-			if (tpm2_type == NULL) {
-				errx(4, "invalid tpm2 option \"%s\"", opts);
+			tpm_type = strsep(&str, ",");
+			if (tpm_type == NULL) {
+				errx(4, "invalid tpm option \"%s\"", opts);
 			}
-			set_config_value("tpm.type", tpm2_type);
+			set_config_value("tpm.type", tpm_type);
 			set_config_value("tpm.version", "2.0");
 
 			pci_parse_legacy_config(find_config_node("tpm"), str);
@@ -270,8 +270,8 @@ lpc_init(struct vmctx *ctx)
 		if (error)
 			return (error);
 	}
-	if (lpc_tpm2_in_use()) {
-		error = tpm2_device_create(&lpc_tpm2, ctx,
+	if (lpc_tpm_in_use()) {
+		error = tpm_device_create(&lpc_tpm, ctx,
 		    find_config_node("tpm"));
 		if (error) {
 			warnx("%s: unable to create a TPM device (%d)",
@@ -600,13 +600,13 @@ lpc_pirq_routed(void)
 }
 
 vm_paddr_t
-lpc_tpm2_get_control_address(void)
+lpc_tpm_get_control_address(void)
 {
-	return tpm2_device_get_control_address(lpc_tpm2);
+	return tpm_device_get_control_address(lpc_tpm);
 }
 
 int
-lpc_tpm2_in_use(void)
+lpc_tpm_in_use(void)
 {
 	return (get_config_value("tpm.type") != NULL);
 }
