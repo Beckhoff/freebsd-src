@@ -39,8 +39,8 @@ tpm2_device_create(struct tpm2_device **const new_dev,
 		return (ENOMEM);
 	}
 
-	int error = acpi_device_create(&dev->acpi_dev, vm_ctx,
-	    TPM2_ACPI_DEVICE_NAME, TPM2_ACPI_HARDWARE_ID);
+	int error = acpi_device_create(&dev->acpi_dev, dev, vm_ctx,
+	    &tpm2_acpi_device_emul);
 	if (error) {
 		tpm2_device_destroy(dev);
 		return (error);
