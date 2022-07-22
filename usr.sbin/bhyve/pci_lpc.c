@@ -135,9 +135,10 @@ lpc_device_parse(const char *opts)
 			if (tpm2_type == NULL) {
 				errx(4, "invalid tpm2 option \"%s\"", opts);
 			}
-			set_config_value("tpm2.type", tpm2_type);
+			set_config_value("tpm.type", tpm2_type);
+			set_config_value("tpm.version", "2.0");
 
-			pci_parse_legacy_config(find_config_node("tpm2"), str);
+			pci_parse_legacy_config(find_config_node("tpm"), str);
 			error = 0;
 			goto done;
 		}
@@ -158,6 +159,17 @@ lpc_device_parse(const char *opts)
 			error = 0;
 			goto done;
 		}
+	}
+
+	/*
+	 * Old versions of bhyve are using the tpm2 config option. This was
+	 * replaced by the tpm config option. For backward compatibility,
+	 * convert the old tpm2 option into the new tpm option.
+	 */
+	const char *value = get_config_value("tpm2.type");
+	if (value != NULL) {
+		set_config_value("tpm.type", value);
+		set_config_value("tpm.version", "2.0");
 	}
 
 done:
@@ -260,7 +272,7 @@ lpc_init(struct vmctx *ctx)
 	}
 	if (lpc_tpm2_in_use()) {
 		error = tpm2_device_create(&lpc_tpm2, ctx,
-		    find_config_node("tpm2"));
+		    find_config_node("tpm"));
 		if (error) {
 			warnx("%s: unable to create a TPM device (%d)",
 			    __func__, error);
@@ -596,7 +608,7 @@ lpc_tpm2_get_control_address(void)
 int
 lpc_tpm2_in_use(void)
 {
-	return (get_config_value("tpm2.type") != NULL);
+	return (get_config_value("tpm.type") != NULL);
 }
 
 #ifdef BHYVE_SNAPSHOT

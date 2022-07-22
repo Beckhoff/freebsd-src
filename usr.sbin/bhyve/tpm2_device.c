@@ -34,6 +34,17 @@ tpm2_device_create(struct tpm2_device **const new_dev,
 		return (EINVAL);
 	}
 
+	const char *value = get_config_value_node(nvl, "version");
+	if (value == NULL) {
+		warnx("%s: no version specified\n", __func__);
+		return (EINVAL);
+	}
+
+	if (strcmp(value, "2.0")) {
+		warnx("%s: unsupported tpm version %s\n", __func__, value);
+		return (EINVAL);
+	}
+
 	struct tpm2_device *const dev = calloc(1, sizeof(*dev));
 	if (dev == NULL) {
 		return (ENOMEM);

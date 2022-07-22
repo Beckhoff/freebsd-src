@@ -143,9 +143,10 @@ Specify the keyboard layout name with the file name in
 This value only works when loaded with UEFI mode for VNC, and
 used a VNC client that don't support QEMU Extended Key Event
 Message (e.g. TightVNC).
-.It Va tpm2.type Ta integer Ta Ta
-Type of the TPM2 device passed to the guest.
-At the moment, only passthru is supported as type. 
+.It Va tpm.type Ta string Ta Ta
+Type of the TPM device passed to the guest.
+.It Va tpm.version Ta string Ta 2.0 Ta
+Version of the TPM device according to the TCG specification.
 .It Va rtc.use_localtime Ta bool Ta true Ta
 The real time clock uses the local time of the host.
 If this is set to false, the real time clock uses UTC.
