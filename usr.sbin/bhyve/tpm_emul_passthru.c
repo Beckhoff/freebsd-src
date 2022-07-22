@@ -20,10 +20,11 @@ __FBSDID("$FreeBSD$");
 
 #include "acpi.h"
 #include "tpm_device_priv.h"
+#include "tpm_emul.h"
 
 static int
-tpm_passthru_device_init(struct tpm_device *const dev,
-    struct vmctx *const vm_ctx, nvlist_t *const nvl)
+tpm_passthru_init(struct tpm_device *const dev, struct vmctx *const vm_ctx,
+    nvlist_t *const nvl)
 {
 	ACPI_BUFFER crs;
 	int error = acpi_device_get_physical_crs(dev->acpi_dev, &crs);
@@ -71,8 +72,8 @@ tpm_passthru_device_init(struct tpm_device *const dev,
 	return (0);
 }
 
-struct tpm_device_emul tpm_passthru_device_emul = {
+static struct tpm_emul tpm_emul_passthru = {
 	.name = "passthru",
-	.init = tpm_passthru_device_init,
+	.init = tpm_passthru_init,
 };
-TPM_DEVICE_EMUL_SET(tpm_passthru_device_emul);
+TPM_EMUL_SET(tpm_emul_passthru);

@@ -20,11 +20,12 @@ __FBSDID("$FreeBSD$");
 
 #include "acpi.h"
 #include "tpm_device_priv.h"
+#include "tpm_emul.h"
 
 #define TPM_ACPI_DEVICE_NAME "TPM"
 #define TPM_ACPI_HARDWARE_ID "MSFT0101"
 
-SET_DECLARE(tpm_device_emul_set, struct tpm_device_emul);
+SET_DECLARE(tpm_emul_set, struct tpm_emul);
 
 static const struct acpi_device_emul tpm_acpi_device_emul = {
 	.name = TPM_ACPI_DEVICE_NAME,
@@ -65,12 +66,13 @@ tpm_device_create(struct tpm_device **const new_dev,
 	dev->control_address = 0;
 
 	const char *tpm_type = get_config_value_node(nvl, "type");
-	struct tpm_device_emul **ppemul;
-	SET_FOREACH(ppemul, tpm_device_emul_set)
+	struct tpm_emul **ppemul;
+	SET_FOREACH(ppemul, tpm_emul_set)
 	{
-		struct tpm_device_emul *const pemul = *ppemul;
-		if (strcmp(tpm_type, pemul->name))
+		struct tpm_emul *const pemul = *ppemul;
+		if (strcmp(tpm_type, pemul->name)) {
 			continue;
+		}
 		dev->emul = pemul;
 		break;
 	}
