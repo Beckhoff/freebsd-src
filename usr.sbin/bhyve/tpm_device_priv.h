@@ -26,6 +26,7 @@ struct tpm_emul;
  * @param dev_data        Device specific data for a specific TPM device type.
  */
 struct tpm_device {
+	struct vmctx *ctx;
 	struct acpi_device *acpi_dev;
 	struct tpm_emul *emul;
 	vm_paddr_t control_address;

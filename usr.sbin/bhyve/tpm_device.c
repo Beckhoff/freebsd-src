@@ -56,6 +56,8 @@ tpm_device_create(struct tpm_device **const new_dev,
 		return (ENOMEM);
 	}
 
+	dev->ctx = vm_ctx;
+
 	int error = acpi_device_create(&dev->acpi_dev, dev, vm_ctx,
 	    &tpm_acpi_device_emul);
 	if (error) {
@@ -82,7 +84,7 @@ tpm_device_create(struct tpm_device **const new_dev,
 	}
 
 	if (dev->emul->init) {
-		error = dev->emul->init(dev, vm_ctx, nvl);
+		error = dev->emul->init(dev);
 		if (error) {
 			tpm_device_destroy(dev);
 			return (error);

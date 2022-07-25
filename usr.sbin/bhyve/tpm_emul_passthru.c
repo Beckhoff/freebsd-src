@@ -23,8 +23,7 @@ __FBSDID("$FreeBSD$");
 #include "tpm_emul.h"
 
 static int
-tpm_passthru_init(struct tpm_device *const dev, struct vmctx *const vm_ctx,
-    nvlist_t *const nvl)
+tpm_passthru_init(struct tpm_device *const dev)
 {
 	ACPI_BUFFER crs;
 	int error = acpi_device_get_physical_crs(dev->acpi_dev, &crs);
@@ -54,7 +53,7 @@ tpm_passthru_init(struct tpm_device *const dev, struct vmctx *const vm_ctx,
 	}
 
 	vm_paddr_t control_address;
-	error = vm_get_memory_region_info(vm_ctx, &control_address, NULL,
+	error = vm_get_memory_region_info(dev->ctx, &control_address, NULL,
 	    MEMORY_REGION_TPM_CONTROL_ADDRESS);
 	if (error) {
 		warnx("%s: failed to get control address of TPM device",

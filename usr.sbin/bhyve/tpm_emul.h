@@ -18,8 +18,7 @@ struct tpm_device;
 struct tpm_emul {
 	const char *name;
 
-	int (
-	    *init)(struct tpm_device *dev, struct vmctx *vm_ctx, nvlist_t *nvl);
+	int (*init)(struct tpm_device *dev);
 	void (*deinit)(struct tpm_device *dev);
 	vm_paddr_t (*get_control_address)(const struct tpm_device *dev);
 	int (*set_control_address)(struct tpm_device *dev,
