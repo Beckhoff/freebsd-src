@@ -130,7 +130,13 @@ lpc_device_parse(const char *opts)
 			error = 0;
 			goto done;
 		}
-		if (strcasecmp(lpcdev, "tpm2") == 0) {
+		if (strcasecmp(lpcdev, "tmp2") == 0) {
+			warnx(
+			    "%s: \"tpm2\" is deprecated, use \"tpm\" instead\n",
+			    __func__);
+		}
+		if (strcasecmp(lpcdev, "tpm") == 0 ||
+		    strcasecmp(lpcdev, "tpm2") == 0) {
 			tpm_type = strsep(&str, ",");
 			if (tpm_type == NULL) {
 				errx(4, "invalid tpm option \"%s\"", opts);
@@ -186,7 +192,7 @@ lpc_print_supported_devices(void)
 	printf("bootrom\n");
 	for (i = 0; i < LPC_UART_NUM; i++)
 		printf("%s\n", lpc_uart_names[i]);
-	printf("tpm2\n");
+	printf("tpm\n");
 	printf("%s\n", pctestdev_getname());
 }
 
