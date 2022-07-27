@@ -122,6 +122,10 @@ The value must be formatted as described in
 Wire guest memory.
 .It Va acpi_tables Ta bool Ta false Ta
 Generate ACPI tables.
+.It Va acpi_tables_in_memory Ta bool Ta true Ta
+Bhyve always exposes ACPI tables by fwcfg.
+For backward compatibility bhyve copies them into the guest memory too.
+That's not recommended for several reasons and can be avoided by setting this config value to false.
 .It Va destroy_on_poweroff Ta bool Ta false Ta
 Destroy the VM on guest-initiated power-off.
 .It Va gdb.address Ta string Ta localhost Ta
