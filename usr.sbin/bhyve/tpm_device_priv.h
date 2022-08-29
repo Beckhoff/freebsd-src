@@ -31,6 +31,8 @@ struct tpm_device {
 	struct tpm_emul *emul;
 	vm_paddr_t control_address;
 	void *dev_data;
+	struct tpm_intf *intf;
+	void *intf_data;
 };
 
 /* default emulation functions */

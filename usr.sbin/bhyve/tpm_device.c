@@ -21,11 +21,13 @@ __FBSDID("$FreeBSD$");
 #include "acpi.h"
 #include "tpm_device_priv.h"
 #include "tpm_emul.h"
+#include "tpm_intf.h"
 
 #define TPM_ACPI_DEVICE_NAME "TPM"
 #define TPM_ACPI_HARDWARE_ID "MSFT0101"
 
 SET_DECLARE(tpm_emul_set, struct tpm_emul);
+SET_DECLARE(tpm_intf_set, struct tpm_intf);
 
 static const struct acpi_device_emul tpm_acpi_device_emul = {
 	.name = TPM_ACPI_DEVICE_NAME,
@@ -67,6 +69,8 @@ tpm_device_create(struct tpm_device **const new_dev,
 
 	dev->control_address = 0;
 
+	set_config_value_node_if_unset(nvl, "intf", "crb");
+
 	const char *tpm_type = get_config_value_node(nvl, "type");
 	struct tpm_emul **ppemul;
 	SET_FOREACH(ppemul, tpm_emul_set)
@@ -78,7 +82,18 @@ tpm_device_create(struct tpm_device **const new_dev,
 		dev->emul = pemul;
 		break;
 	}
-	if (dev->emul == NULL) {
+	const char *tpm_intf = get_config_value_node(nvl, "intf");
+	struct tpm_intf **ppintf;
+	SET_FOREACH(ppintf, tpm_intf_set)
+	{
+		if (strcmp(tpm_intf, (*ppintf)->name)) {
+			continue;
+		}
+		dev->intf = *ppintf;
+		break;
+	}
+
+	if (dev->emul == NULL || dev->intf == NULL) {
 		tpm_device_destroy(dev);
 		return (EINVAL);
 	}
@@ -87,6 +102,12 @@ tpm_device_create(struct tpm_device **const new_dev,
 		error = dev->emul->init(dev);
 		if (error) {
 			tpm_device_destroy(dev);
+			return (error);
+		}
+	}
+	if (dev->intf->init) {
+		error = dev->intf->init(dev);
+		if (error) {
 			return (error);
 		}
 	}
@@ -101,6 +122,9 @@ tpm_device_destroy(struct tpm_device *const dev)
 {
 	if (dev == NULL) {
 		return;
+	}
+	if (dev->intf != NULL && dev->intf->deinit != NULL) {
+		dev->intf->deinit(dev);
 	}
 	if (dev->emul != NULL && dev->emul->deinit != NULL) {
 		dev->emul->deinit(dev);
