@@ -414,6 +414,30 @@ tpm_crb_init(struct tpm_device *dev)
 		return (error);
 	}
 
+	error = acpi_device_add_res_fixed_memory32(dev->acpi_dev, false,
+	    TPM_CRB_ADDRESS, TPM_CRB_CONTROL_AREA_SIZE);
+	if (error) {
+		warnx("%s: failed to add acpi resources\n", __func__);
+		return (EFAULT);
+	}
+
+	/* trap accesses to crb */
+	struct mem_range mr;
+	bzero(&mr, sizeof(struct mem_range));
+	char mr_name[NAME_MAX];
+	snprintf(mr_name, sizeof(mr_name), "tpm_intf_%s", intf->name);
+	mr.name = mr_name;
+	mr.base = TPM_CRB_ADDRESS;
+	mr.size = TPM_CRB_CONTROL_AREA_SIZE;
+	mr.flags = MEM_F_RW;
+	mr.handler = tpm_crb_mem_handler;
+	mr.arg1 = dev;
+	error = register_mem(&mr);
+	if (error) {
+		warnx("%s: failed to create trap for crb accesses\n", __func__);
+		return (error);
+	}
+
 	error = pthread_mutex_init(&crb->mutex, NULL);
 	if (error) {
 		warnx("%s: failed to init mutex\n", __func__);
@@ -458,6 +482,20 @@ tpm_crb_deinit(struct tpm_device *dev)
 	}
 
 	free(crb);
+
+	if (dev->intf == NULL) {
+		return;
+	}
+	struct tpm_intf *const intf = dev->intf;
+
+	struct mem_range mr;
+	bzero(&mr, sizeof(struct mem_range));
+	char mr_name[NAME_MAX];
+	snprintf(mr_name, sizeof(mr_name), "tpm_intf_%s", intf->name);
+	mr.name = mr_name;
+	mr.base = TPM_CRB_ADDRESS;
+	mr.size = TPM_CRB_LOCALITIES_MAX * TPM_CRB_REGS_SIZE;
+	unregister_mem(&mr);
 }
 
 static int
