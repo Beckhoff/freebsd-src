@@ -28,6 +28,7 @@ struct tpm_device {
 	struct vmctx *ctx;
 	struct acpi_device *acpi_dev;
 	struct tpm_emul *emul;
+	void *emul_data;
 	void *dev_data;
 	struct tpm_intf *intf;
 	void *intf_data;
