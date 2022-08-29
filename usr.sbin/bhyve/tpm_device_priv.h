@@ -32,4 +32,6 @@ struct tpm_device {
 	void *dev_data;
 	struct tpm_intf *intf;
 	void *intf_data;
+	struct tpm_ppi *ppi;
+	void *ppi_data;
 };
