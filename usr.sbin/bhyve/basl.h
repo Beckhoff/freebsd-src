@@ -63,6 +63,9 @@
 
 struct basl_table;
 
+extern struct basl_table *rsdt;
+extern struct basl_table *xsdt;
+
 void basl_fill_gas(ACPI_GENERIC_ADDRESS *gas, uint8_t space_id,
     uint8_t bit_width, uint8_t bit_offset, uint8_t access_width,
     uint64_t address);

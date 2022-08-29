@@ -29,9 +29,22 @@ __FBSDID("$FreeBSD$");
 SET_DECLARE(tpm_emul_set, struct tpm_emul);
 SET_DECLARE(tpm_intf_set, struct tpm_intf);
 
+static int
+tpm_build_acpi_table(const struct acpi_device *const dev)
+{
+	const struct tpm_device *const tpm = acpi_device_get_softc(dev);
+
+	if (tpm->intf->build_acpi_table == NULL) {
+		return (0);
+	}
+
+	return (tpm->intf->build_acpi_table(tpm));
+}
+
 static const struct acpi_device_emul tpm_acpi_device_emul = {
 	.name = TPM_ACPI_DEVICE_NAME,
 	.hid = TPM_ACPI_HARDWARE_ID,
+	.build_table = tpm_build_acpi_table,
 };
 
 int

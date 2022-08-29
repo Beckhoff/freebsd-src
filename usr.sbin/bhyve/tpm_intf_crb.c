@@ -34,11 +34,19 @@
 #define TPM_CRB_ADDRESS 0xFED40000
 #define TPM_CRB_REGS_SIZE 0x1000
 
+#define TPM_CRB_CONTROL_AREA_ADDRESS \
+	(TPM_CRB_ADDRESS + offsetof(struct tpm_crb_regs, ctrl_req))
+#define TPM_CRB_CONTROL_AREA_SIZE TPM_CRB_REGS_SIZE
+
 #define TPM_CRB_DATA_BUFFER_ADDRESS \
 	(TPM_CRB_ADDRESS + offsetof(struct tpm_crb_regs, data_buffer))
 #define TPM_CRB_DATA_BUFFER_SIZE 0xF80
 
 #define TPM_CRB_LOCALITIES_MAX 5
+
+#define TPM_CRB_LOG_AREA_MINIMUM_SIZE (64 * 1024)
+
+#define TPM_CRB_LOG_AREA_FWCFG_NAME "etc/tpm/log"
 
 struct tpm_crb_regs {
 	union tpm_crb_reg_loc_state {
@@ -159,12 +167,15 @@ static_assert(sizeof(struct tpm_crb_regs) == TPM_CRB_REGS_SIZE,
 	} while (0)
 
 struct tpm_crb {
+	uint8_t tpm_log_area[TPM_CRB_LOG_AREA_MINIMUM_SIZE];
 	struct tpm_crb_regs regs;
 };
 
 static int
 tpm_crb_init(struct tpm_device *dev)
 {
+	int error;
+
 	struct tpm_crb *const crb = calloc(1, sizeof(struct tpm_crb));
 	dev->intf_data = crb;
 	if (crb == NULL) {
@@ -198,6 +209,13 @@ tpm_crb_init(struct tpm_device *dev)
 	CRB_RSP_SIZE_WRITE(crb->regs, TPM_CRB_DATA_BUFFER_SIZE);
 	CRB_RSP_ADDR_WRITE(crb->regs, TPM_CRB_DATA_BUFFER_ADDRESS);
 
+	error = qemu_fwcfg_add_file(TPM_CRB_LOG_AREA_FWCFG_NAME,
+	    TPM_CRB_LOG_AREA_MINIMUM_SIZE, crb->tpm_log_area);
+	if (error) {
+		warnx("%s: failed to add fwcfg file\n", __func__);
+		return (error);
+	}
+
 	return (0);
 }
 
@@ -213,9 +231,48 @@ tpm_crb_deinit(struct tpm_device *dev)
 	free(crb);
 }
 
+static int
+tpm_crb_build_acpi_table(const struct tpm_device *const dev)
+{
+	struct vmctx *const ctx = dev->ctx;
+
+	struct basl_table *table;
+	BASL_EXEC(basl_table_create(&table, ctx, ACPI_SIG_TPM2,
+	    BASL_TABLE_ALIGNMENT));
+
+	/* Header */
+	BASL_EXEC(basl_table_append_header(table, ACPI_SIG_TPM2, 4, 1));
+	/* Platform Class */
+	BASL_EXEC(basl_table_append_int(table, 0, 2));
+	/* Reserved */
+	BASL_EXEC(basl_table_append_int(table, 0, 2));
+	/* Control Address */
+	BASL_EXEC(
+	    basl_table_append_int(table, TPM_CRB_CONTROL_AREA_ADDRESS, 8));
+	/* Start Method == (7) Command Response Buffer */
+	BASL_EXEC(basl_table_append_int(table, 7, 4));
+	/* Start Method Specific Parameters */
+	uint8_t parameters[12] = { 0 };
+	BASL_EXEC(basl_table_append_bytes(table, parameters, 12));
+	/* Log Area Minimum Length */
+	BASL_EXEC(
+	    basl_table_append_int(table, TPM_CRB_LOG_AREA_MINIMUM_SIZE, 4));
+	/* Log Area Start Address */
+	BASL_EXEC(
+	    basl_table_append_fwcfg(table, TPM_CRB_LOG_AREA_FWCFG_NAME, 1, 8));
+
+	BASL_EXEC(basl_table_append_pointer(rsdt, ACPI_SIG_TPM2,
+	    ACPI_RSDT_ENTRY_SIZE));
+	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_TPM2,
+	    ACPI_XSDT_ENTRY_SIZE));
+
+	return (0);
+}
+
 static struct tpm_intf tpm_intf_crb = {
 	.name = "crb",
 	.init = tpm_crb_init,
 	.deinit = tpm_crb_deinit,
+	.build_acpi_table = tpm_crb_build_acpi_table,
 };
 TPM_INTF_SET(tpm_intf_crb);

@@ -92,8 +92,8 @@ static FILE *dsdt_fp;
 static int dsdt_indent_level;
 static int dsdt_error;
 
-static struct basl_table *rsdt;
-static struct basl_table *xsdt;
+struct basl_table *rsdt;
+struct basl_table *xsdt;
 
 struct basl_fio {
 	int	fd;
@@ -129,42 +129,6 @@ acpi_tables_add_device(const struct acpi_device *const dev)
 	SLIST_INSERT_HEAD(&acpi_devices, entry, chain);
 
 	return (0);
-}
-
-static int
-basl_fwrite_tpm2(FILE *const fp)
-{
-	EFPRINTF(fp, "/*\n");
-	EFPRINTF(fp, " * bhyve TPM2 template\n");
-	EFPRINTF(fp, " */\n");
-	EFPRINTF(fp, "[0004]\t\tSignature : \"TPM2\"\n");
-	EFPRINTF(fp, "[0004]\t\tTable Length : 0000004C\n");
-	EFPRINTF(fp, "[0001]\t\tRevision : 00\n");
-	EFPRINTF(fp, "[0001]\t\tChecksum : 00\n");
-	EFPRINTF(fp, "[0006]\t\tOem ID : \"BHYVE \"\n");
-	EFPRINTF(fp, "[0008]\t\tOem Table ID : \"BVTPM2  \"\n");
-	EFPRINTF(fp, "[0004]\t\tOem Revision : 00000000\n");
-
-	/* iasl will fill in the compiler ID/revision fields */
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler ID : \"xxxx\"\n");
-	EFPRINTF(fp, "[0004]\t\tAsl Compiler Revision : 00000000\n");
-
-	EFPRINTF(fp, "[0002]\t\tPlatform Class : 0000\n");
-	EFPRINTF(fp, "[0002]\t\tReserved : 0000\n");
-	EFPRINTF(fp, "[0008]\t\tControl Address : %016lX\n",
-	    lpc_tpm2_get_control_address());
-	EFPRINTF(fp, "[0004]\t\tStart Method : 00000007\n");
-	EFPRINTF(fp,
-	    "[0012]\t\tMethod Parameters : 00 00 00 00 00 00 00 00 00 00 00 00\n");
-	EFPRINTF(fp, "[0004]\t\tMinimum Log Length : 00000000\n");
-	EFPRINTF(fp, "[0008]\t\tLog Address : 0000000000000000\n");
-
-	EFFLUSH(fp);
-
-	return (0);
-
-err_exit:
-	return (errno);
 }
 
 /*
@@ -790,43 +754,6 @@ build_spcr(struct vmctx *const ctx)
 }
 
 static int
-build_tpm2(struct vmctx *const ctx)
-{
-	struct basl_table *tpm2;
-
-	BASL_EXEC(
-	    basl_table_create(&tpm2, ctx, ACPI_SIG_TPM2, BASL_TABLE_ALIGNMENT));
-
-	/* Header */
-	BASL_EXEC(
-	    basl_table_append_header(tpm2, ACPI_SIG_TPM2, BASL_REVISION_TPM2,
-		BASL_OEM_ID, BASL_OEM_TABLE_ID_TPM2, BASL_OEM_REVISION_TPM2));
-	/* Platform Class */
-	BASL_EXEC(basl_table_append_int(tpm2, 0, 2));
-	/* Reserved */
-	BASL_EXEC(basl_table_append_int(tpm2, 0, 2));
-	/* Control Address */
-	BASL_EXEC(
-	    basl_table_append_int(tpm2, lpc_tpm_get_control_address(), 8));
-	/* Start Method */
-	BASL_EXEC(basl_table_append_int(tpm2, 7, 4));
-	/* Start Method Specific Parameters */
-	uint8_t parameters[12] = { 0 };
-	BASL_EXEC(basl_table_append_bytes(tpm2, parameters, 12));
-	/* Log Area Minimum Length */
-	BASL_EXEC(basl_table_append_int(tpm2, 0, 4));
-	/* Log Area Start Address */
-	BASL_EXEC(basl_table_append_int(tpm2, 0, 8));
-
-	BASL_EXEC(basl_table_append_pointer(rsdt, ACPI_SIG_TPM2,
-	    ACPI_RSDT_ENTRY_SIZE));
-	BASL_EXEC(basl_table_append_pointer(xsdt, ACPI_SIG_TPM2,
-	    ACPI_XSDT_ENTRY_SIZE));
-
-	return (0);
-}
-
-static int
 build_xsdt(struct vmctx *const ctx)
 {
 	BASL_EXEC(
@@ -884,10 +811,6 @@ acpi_build(struct vmctx *ctx, int ncpu)
 	BASL_EXEC(build_mcfg(ctx));
 	BASL_EXEC(build_facs(ctx));
 	BASL_EXEC(build_spcr(ctx));
-
-	if (lpc_tpm_in_use()) {
-		BASL_EXEC(build_tpm2(ctx));
-	}
 
 	/* Build ACPI device-specific tables such as a TPM2 table. */
 	const struct acpi_device_list_entry *entry;
