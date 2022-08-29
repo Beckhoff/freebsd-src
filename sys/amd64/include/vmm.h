@@ -772,7 +772,8 @@ enum vm_acpi_device_info_type {
 enum vm_memory_region_type {
 	MEMORY_REGION_INTEL_GSM,
 	MEMORY_REGION_INTEL_OPREGION,
-	MEMORY_REGION_TPM_CONTROL_ADDRESS,
+	/* CorvinK-TODO: remove deprecated on next major upgrade */
+	MEMORY_REGION_TPM_CONTROL_ADDRESS, /* deprecated */
 };
 
 /* APIs to inject faults into the guest */

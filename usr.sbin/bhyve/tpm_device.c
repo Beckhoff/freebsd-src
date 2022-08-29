@@ -80,8 +80,6 @@ tpm_device_create(struct tpm_device **const new_dev,
 		return (error);
 	}
 
-	dev->control_address = 0;
-
 	set_config_value_node_if_unset(nvl, "intf", "crb");
 
 	const char *tpm_type = get_config_value_node(nvl, "type");
@@ -145,48 +143,4 @@ tpm_device_destroy(struct tpm_device *const dev)
 
 	acpi_device_destroy((struct acpi_device *)dev);
 	free(dev);
-}
-
-vm_paddr_t
-_tpm_device_get_control_address(const struct tpm_device *const dev)
-{
-	return (dev->control_address);
-}
-
-vm_paddr_t
-tpm_device_get_control_address(const struct tpm_device *const dev)
-{
-	if (dev == NULL || dev->emul == NULL) {
-		return (0);
-	}
-
-	if (dev->emul->get_control_address) {
-		return dev->emul->get_control_address(dev);
-	}
-
-	return _tpm_device_get_control_address(dev);
-}
-
-int
-_tpm_device_set_control_address(struct tpm_device *const dev,
-    const vm_paddr_t control_address)
-{
-	dev->control_address = control_address;
-
-	return (0);
-}
-
-int
-tpm_device_set_control_address(struct tpm_device *const dev,
-    const vm_paddr_t control_address)
-{
-	if (dev == NULL || dev->emul == NULL) {
-		return (EINVAL);
-	}
-
-	if (dev->emul->set_control_address) {
-		dev->emul->set_control_address(dev, control_address);
-	}
-
-	return _tpm_device_set_control_address(dev, control_address);
 }

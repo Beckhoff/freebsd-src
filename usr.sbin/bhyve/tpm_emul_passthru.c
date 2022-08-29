@@ -52,22 +52,6 @@ tpm_passthru_init(struct tpm_device *const dev)
 		return (error);
 	}
 
-	vm_paddr_t control_address;
-	error = vm_get_memory_region_info(dev->ctx, &control_address, NULL,
-	    MEMORY_REGION_TPM_CONTROL_ADDRESS);
-	if (error) {
-		warnx("%s: failed to get control address of TPM device",
-		    __func__);
-		return (error);
-	}
-
-	error = _tpm_device_set_control_address(dev, control_address);
-	if (error) {
-		warnx("%s: unable to set control address of TPM device",
-		    __func__);
-		return (error);
-	}
-
 	return (0);
 }
 

@@ -20,8 +20,5 @@ struct tpm_emul {
 
 	int (*init)(struct tpm_device *dev);
 	void (*deinit)(struct tpm_device *dev);
-	vm_paddr_t (*get_control_address)(const struct tpm_device *dev);
-	int (*set_control_address)(struct tpm_device *dev,
-	    vm_paddr_t control_address);
 };
 #define TPM_EMUL_SET(x) DATA_SET(tpm_emul_set, x)

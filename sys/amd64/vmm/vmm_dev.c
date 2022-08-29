@@ -666,6 +666,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 			    vm_intelgpu_get_opregion(&memory_region_info->base,
 				&memory_region_info->size);
 			break;
+		/* CorvinK-TODO: remove deprecated on next major upgrade */
 		case MEMORY_REGION_TPM_CONTROL_ADDRESS:
 			error = vmm_tpm2_get_control_address(
 			    &memory_region_info->base,

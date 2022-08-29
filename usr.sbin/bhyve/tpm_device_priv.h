@@ -22,21 +22,13 @@ struct tpm_emul;
  * @param acpi_dev        A TPM device is an ACPI device.
  * @param emul            Emulation functions for different types of TPM
  *                        devices.
- * @param control_address Control address of the TPM device.
  * @param dev_data        Device specific data for a specific TPM device type.
  */
 struct tpm_device {
 	struct vmctx *ctx;
 	struct acpi_device *acpi_dev;
 	struct tpm_emul *emul;
-	vm_paddr_t control_address;
 	void *dev_data;
 	struct tpm_intf *intf;
 	void *intf_data;
 };
-
-/* default emulation functions */
-vm_paddr_t _tpm_device_get_control_address(
-    const struct tpm_device *const dev);
-int _tpm_device_set_control_address(struct tpm_device *const dev,
-    const vm_paddr_t control_address);
