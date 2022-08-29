@@ -172,6 +172,7 @@ struct tpm_crb {
 	pthread_t thread;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
+	pthread_mutex_t rw_mutex;
 	bool closing;
 };
 
@@ -234,6 +235,136 @@ tpm_crb_thread(void *const arg)
 	pthread_mutex_unlock(&crb->mutex);
 
 	return (NULL);
+}
+
+static int
+tpm_crb_mem_handler(struct vcpu *vcpu __unused, const int dir,
+    const uint64_t addr, const int size, uint64_t *const val, void *const arg1,
+    const long arg2 __unused)
+{
+	if ((addr & (size - 1)) != 0) {
+		warnx("%s: unaligned %s access @ %16lx [size = %x]\n", __func__,
+		    (dir == MEM_F_READ) ? "read" : "write", addr, size);
+	}
+
+	struct tpm_device *const dev = arg1;
+	struct tpm_crb *const crb = dev->intf_data;
+
+	const uint64_t off = addr - TPM_CRB_ADDRESS;
+	const uint64_t reg = off & ~3;
+	const uint64_t reg_off = off & 3;
+	uint8_t *const ptr = (uint8_t *)&crb->regs + off;
+
+	if (off > TPM_CRB_REGS_SIZE || off + size >= TPM_CRB_REGS_SIZE) {
+		return (EINVAL);
+	}
+
+	pthread_mutex_lock(&crb->rw_mutex);
+	if (dir == MEM_F_READ) {
+		switch (size) {
+		case 1:
+			*val = *(uint8_t *)ptr;
+			break;
+		case 2:
+			*val = *(uint16_t *)ptr;
+			break;
+		case 4:
+			*val = *(uint32_t *)ptr;
+			break;
+		case 8:
+			*val = *(uint64_t *)ptr;
+			break;
+		default:
+			warnx("%s: invalid read size %d @ %16lx\n", __func__,
+			    size, addr);
+			return (EINVAL);
+		}
+	} else {
+		switch (reg) {
+		case offsetof(struct tpm_crb_regs, loc_ctrl): {
+			const union tpm_crb_reg_loc_ctrl loc_ctrl = {
+				.val = *val << (8 * reg_off),
+			};
+
+			if (loc_ctrl.relinquish) {
+				crb->regs.loc_sts.granted = false;
+				crb->regs.loc_state.loc_assigned = false;
+			} else if (loc_ctrl.request_access) {
+				crb->regs.loc_sts.granted = true;
+				crb->regs.loc_state.loc_assigned = true;
+			}
+
+			break;
+		}
+		case offsetof(struct tpm_crb_regs, ctrl_req): {
+			const union tpm_crb_reg_ctrl_req req = {
+				.val = *val << (8 * reg_off),
+			};
+
+			if (req.cmd_ready && !req.go_idle) {
+				crb->regs.ctrl_sts.tpm_idle = false;
+			} else if (!req.cmd_ready && req.go_idle) {
+				crb->regs.ctrl_sts.tpm_idle = true;
+			}
+
+			break;
+		}
+		case offsetof(struct tpm_crb_regs, ctrl_cancel): {
+			/* TODO: cancel the tpm command */
+			warnx(
+			    "%s: cancelling a TPM command is not implemented yet\n",
+			    __func__);
+
+			break;
+		}
+		case offsetof(struct tpm_crb_regs, ctrl_start): {
+			const union tpm_crb_reg_ctrl_start start = {
+				.val = *val << (8 * reg_off),
+			};
+
+			if (!start.start || crb->regs.ctrl_start.start)
+				break;
+
+			crb->regs.ctrl_start.start = true;
+
+			pthread_cond_signal(&crb->cond);
+
+			break;
+		}
+		case offsetof(struct tpm_crb_regs, loc_state):
+		case offsetof(struct tpm_crb_regs, loc_sts):
+		case offsetof(struct tpm_crb_regs, intf_id):
+		case offsetof(struct tpm_crb_regs, ctrl_ext):
+		case offsetof(struct tpm_crb_regs, ctrl_sts):
+		case offsetof(struct tpm_crb_regs, int_enable):
+		case offsetof(struct tpm_crb_regs, int_sts):
+			/* ignore writes */
+			break;
+		default:
+			switch (size) {
+			case 1:
+				*(uint8_t *)ptr = *val;
+				break;
+			case 2:
+				*(uint16_t *)ptr = *val;
+				break;
+			case 4:
+				*(uint32_t *)ptr = *val;
+				break;
+			case 8:
+				*(uint64_t *)ptr = *val;
+				break;
+			default:
+				warnx("%s: invalid write size %d @ %16lx\n",
+				    __func__, size, addr);
+				return (EINVAL);
+			}
+			break;
+		}
+	}
+	pthread_mutex_unlock(&crb->rw_mutex);
+
+	return (0);
 }
 
 static int
@@ -304,6 +435,12 @@ tpm_crb_init(struct tpm_device *dev)
 	char thread_name[NAME_MAX];
 	snprintf(thread_name, sizeof(thread_name), "tpm_intf_%s", intf->name);
 	pthread_set_name_np(crb->thread, thread_name);
+
+	error = pthread_mutex_init(&crb->rw_mutex, NULL);
+	if (error) {
+		warnx("%s: failed to init rw mutex\n", __func__);
+		return (error);
+	}
 
 	return (0);
 }
