@@ -14,7 +14,10 @@
 
 struct tpm_device;
 
-/* device creation and destruction */
+/**
+ * Creates a new TPM device. If the creation fails, no resources are freed. The
+ * caller has to call the destroy function to free all resources.
+ */
 int tpm_device_create(struct tpm_device **const new_dev,
     struct vmctx *const vm_ctx, nvlist_t *const nvl);
 void tpm_device_destroy(struct tpm_device *const dev);

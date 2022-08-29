@@ -67,6 +67,7 @@ tpm_device_create(struct tpm_device **const new_dev,
 	}
 
 	struct tpm_device *const dev = calloc(1, sizeof(*dev));
+	*new_dev = dev;
 	if (dev == NULL) {
 		return (ENOMEM);
 	}
@@ -76,7 +77,6 @@ tpm_device_create(struct tpm_device **const new_dev,
 	int error = acpi_device_create(&dev->acpi_dev, dev, vm_ctx,
 	    &tpm_acpi_device_emul);
 	if (error) {
-		tpm_device_destroy(dev);
 		return (error);
 	}
 
@@ -105,14 +105,12 @@ tpm_device_create(struct tpm_device **const new_dev,
 	}
 
 	if (dev->emul == NULL || dev->intf == NULL) {
-		tpm_device_destroy(dev);
 		return (EINVAL);
 	}
 
 	if (dev->emul->init) {
 		error = dev->emul->init(dev);
 		if (error) {
-			tpm_device_destroy(dev);
 			return (error);
 		}
 	}
@@ -122,8 +120,6 @@ tpm_device_create(struct tpm_device **const new_dev,
 			return (error);
 		}
 	}
-
-	*new_dev = dev;
 
 	return (0);
 }

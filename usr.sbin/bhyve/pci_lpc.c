@@ -280,6 +280,7 @@ lpc_init(struct vmctx *ctx)
 		error = tpm_device_create(&lpc_tpm, ctx,
 		    find_config_node("tpm"));
 		if (error) {
+			tpm_device_destroy(lpc_tpm);
 			warnx("%s: unable to create a TPM device (%d)",
 			    __func__, error);
 			return (error);
