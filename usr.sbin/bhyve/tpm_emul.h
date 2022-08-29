@@ -20,5 +20,7 @@ struct tpm_emul {
 
 	int (*init)(struct tpm_device *dev);
 	void (*deinit)(struct tpm_device *dev);
+	int (*execute_cmd)(struct tpm_device *dev, void *cmd, uint32_t cmd_size,
+	    void *rsp, uint32_t rsp_size);
 };
 #define TPM_EMUL_SET(x) DATA_SET(tpm_emul_set, x)

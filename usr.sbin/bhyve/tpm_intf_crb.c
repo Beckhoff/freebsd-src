@@ -169,12 +169,79 @@ static_assert(sizeof(struct tpm_crb_regs) == TPM_CRB_REGS_SIZE,
 struct tpm_crb {
 	uint8_t tpm_log_area[TPM_CRB_LOG_AREA_MINIMUM_SIZE];
 	struct tpm_crb_regs regs;
+	pthread_t thread;
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
+	bool closing;
 };
+
+static void *
+tpm_crb_thread(void *const arg)
+{
+	struct tpm_device *const dev = arg;
+	struct tpm_crb *const crb = dev->intf_data;
+
+	pthread_mutex_lock(&crb->mutex);
+	for (;;) {
+		pthread_cond_wait(&crb->cond, &crb->mutex);
+
+		if (crb->closing)
+			break;
+
+		const uint64_t cmd_addr = CRB_CMD_ADDR_READ(crb->regs);
+		const uint64_t rsp_addr = CRB_RSP_ADDR_READ(crb->regs);
+		const uint32_t cmd_size = CRB_CMD_SIZE_READ(crb->regs);
+		const uint32_t rsp_size = CRB_RSP_SIZE_READ(crb->regs);
+
+		const uint64_t cmd_off = cmd_addr - TPM_CRB_DATA_BUFFER_ADDRESS;
+		const uint64_t rsp_off = rsp_addr - TPM_CRB_DATA_BUFFER_ADDRESS;
+
+		if (cmd_off > TPM_CRB_DATA_BUFFER_SIZE ||
+		    cmd_off + cmd_size > TPM_CRB_DATA_BUFFER_SIZE ||
+		    rsp_off > TPM_CRB_DATA_BUFFER_SIZE ||
+		    rsp_off + rsp_size > TPM_CRB_DATA_BUFFER_SIZE) {
+			warnx(
+			    "%s: invalid cmd [%16lx, %16lx] --> [%16lx, %16lx]\n\r",
+			    __func__, cmd_addr, cmd_addr + cmd_size, rsp_addr,
+			    rsp_addr + rsp_size);
+			break;
+		}
+
+		/*
+		 * The command response buffer interface uses a single buffer
+		 * for sending a command to and receiving a response from the
+		 * tpm. To avoid reading old data from the command buffer which
+		 * might be a security issue, we zero out the command buffer
+		 * before writing the response into it. The rsp_size parameter
+		 * is controlled by the guest and it's not guaranteed that the
+		 * response has a size of rsp_size (e.g. if the tpm returned an
+		 * error, the response would have a different size than
+		 * expected). For that reason, use a second buffer for the
+		 * response.
+		 */
+		uint8_t rsp[TPM_CRB_DATA_BUFFER_SIZE] = { 0 };
+		if (dev->emul->execute_cmd) {
+			dev->emul->execute_cmd(dev,
+			    &crb->regs.data_buffer[cmd_off], cmd_size,
+			    &rsp[rsp_off], rsp_size);
+		}
+
+		memset(crb->regs.data_buffer, 0, TPM_CRB_DATA_BUFFER_SIZE);
+		memcpy(&crb->regs.data_buffer[rsp_off], &rsp[rsp_off], rsp_size);
+
+		crb->regs.ctrl_start.start = false;
+	}
+	pthread_mutex_unlock(&crb->mutex);
+
+	return (NULL);
+}
 
 static int
 tpm_crb_init(struct tpm_device *dev)
 {
 	int error;
+
+	struct tpm_intf *const intf = dev->intf;
 
 	struct tpm_crb *const crb = calloc(1, sizeof(struct tpm_crb));
 	dev->intf_data = crb;
@@ -216,6 +283,28 @@ tpm_crb_init(struct tpm_device *dev)
 		return (error);
 	}
 
+	error = pthread_mutex_init(&crb->mutex, NULL);
+	if (error) {
+		warnx("%s: failed to init mutex\n", __func__);
+		return (error);
+	}
+
+	error = pthread_cond_init(&crb->cond, NULL);
+	if (error) {
+		warnx("%s: failed to init cond\n", __func__);
+		return (error);
+	}
+
+	error = pthread_create(&crb->thread, NULL, tpm_crb_thread, dev);
+	if (error) {
+		warnx("%s: failed to create thread\n", __func__);
+		return (error);
+	}
+
+	char thread_name[NAME_MAX];
+	snprintf(thread_name, sizeof(thread_name), "tpm_intf_%s", intf->name);
+	pthread_set_name_np(crb->thread, thread_name);
+
 	return (0);
 }
 
@@ -227,6 +316,9 @@ tpm_crb_deinit(struct tpm_device *dev)
 	}
 
 	struct tpm_crb *const crb = dev->intf_data;
+	if (crb != NULL) {
+		crb->closing = true;
+	}
 
 	free(crb);
 }
