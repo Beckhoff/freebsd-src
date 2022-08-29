@@ -344,7 +344,8 @@ enum {
 	IOCNUM_PPTDEV_DISABLE_MSIX = 45,
 	IOCNUM_UNMAP_PPTDEV_MMIO = 46,
 	IOCNUM_GET_MEMORY_REGION_INFO = 47,
-	IOCNUM_MODIFY_SLAT = 48,
+	/* CorvinK-TODO: remove deprecated on next major upgrade */
+	IOCNUM_MODIFY_SLAT = 48,		/* deprecated */
 
 	/* statistics */
 	IOCNUM_VM_STATS = 50, 
@@ -378,7 +379,8 @@ enum {
 	IOCNUM_RTC_GETTIME = 103,
 
 	/* ACPI */
-	IOCNUM_GET_ACPI_DEVICE_INFO = 110,
+	/* CorvinK-TODO: remove deprecated on next major upgrade */
+	IOCNUM_GET_ACPI_DEVICE_INFO = 110,	/* deprecated */
 
 	/* checkpoint */
 	IOCNUM_SNAPSHOT_REQ = 113,
@@ -468,8 +470,9 @@ enum {
 	_IOW('v', IOCNUM_UNMAP_PPTDEV_MMIO, struct vm_pptdev_mmio)
 #define VM_GET_MEMORY_REGION_INFO \
 	_IOWR('v', IOCNUM_GET_MEMORY_REGION_INFO, struct vm_memory_region_info)
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 #define VM_MODIFY_SLAT \
-	_IOW('v', IOCNUM_MODIFY_SLAT, struct vm_slat_op)
+	_IOW('v', IOCNUM_MODIFY_SLAT, struct vm_slat_op) /* deprecated */
 #define VM_INJECT_NMI \
 	_IOW('v', IOCNUM_INJECT_NMI, struct vm_nmi)
 #define	VM_STATS \

@@ -195,12 +195,16 @@ int	vm_unmap_pptdev_mmio(struct vmctx *ctx, int bus, int slot, int func,
 			     vm_paddr_t gpa, size_t len);
 int vm_get_memory_region_info(struct vmctx *const ctx, vm_paddr_t *const base,
     vm_paddr_t *const size, const enum vm_memory_region_type type);
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int vm_mmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len, const vm_paddr_t hpa);
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int vm_munmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len);
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int vm_mwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len);
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int vm_munwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len);
 int vm_setup_pptdev_msi(struct vmctx *ctx, int bus, int slot, int func,

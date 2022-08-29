@@ -1060,6 +1060,7 @@ vm_get_memory_region_info(struct vmctx *const ctx, vm_paddr_t *const base,
 	return (error);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 /*
  * Modifies the second level address translation (SLAT) of the guest memory
  * space.
@@ -1078,6 +1079,7 @@ vm_mmodify_slat(struct vmctx *const ctx, const vm_paddr_t gpa, const vm_paddr_t 
 	return ioctl(ctx->fd, VM_MODIFY_SLAT, &slat_op);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int
 vm_mmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len, const vm_paddr_t hpa)
@@ -1085,6 +1087,7 @@ vm_mmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
 	return vm_mmodify_slat(ctx, gpa, len, hpa, VM_MAP_MMIO);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int
 vm_munmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len)
@@ -1092,6 +1095,7 @@ vm_munmap_mmio(struct vmctx *const ctx, const vm_paddr_t gpa,
 	return vm_mmodify_slat(ctx, gpa, len, 0, VM_UNMAP_MMIO);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int
 vm_mwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len)
@@ -1099,6 +1103,7 @@ vm_mwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
 	return vm_mmodify_slat(ctx, gpa, len, 0, VM_WIRE_GPA);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 int
 vm_munwire_gpa(struct vmctx *const ctx, const vm_paddr_t gpa,
     const vm_paddr_t len)
@@ -1871,6 +1876,7 @@ vm_get_topology(struct vmctx *ctx,
 	return (error);
 }
 
+/* CorvinK-TODO: remove deprecated on next major upgrade */
 /* Keep in sync with machine/vmm_dev.h. */
 static const cap_ioctl_t vm_ioctl_cmds[] = { VM_RUN, VM_SUSPEND, VM_REINIT,
 	VM_ALLOC_MEMSEG, VM_GET_MEMSEG, VM_MMAP_MEMSEG, VM_MMAP_MEMSEG,

@@ -507,6 +507,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 	case VM_MMAP_MEMSEG:
 	case VM_MUNMAP_MEMSEG:
 	case VM_REINIT:
+	/* CorvinK-TODO: remove deprecated on next major upgrade */
 	case VM_MODIFY_SLAT:
 		/*
 		 * ioctls that modify the memory map must lock memory
@@ -677,6 +678,7 @@ vmmdev_ioctl(struct cdev *cdev, u_long cmd, caddr_t data, int fflag,
 			break;
 		}
 		break;
+	/* CorvinK-TODO: remove deprecated on next major upgrade */
 	case VM_MODIFY_SLAT:
 		slat_op = (struct vm_slat_op *)data;
 		switch (slat_op->type) {
