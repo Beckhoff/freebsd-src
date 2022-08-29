@@ -53,15 +53,7 @@ int acpi_device_add_res_fixed_ioport(struct acpi_device *dev, UINT16 port,
 int acpi_device_add_res_fixed_memory32(struct acpi_device *dev,
     UINT8 write_protected, UINT32 address, UINT32 length);
 
-int acpi_device_get_physical_crs(const struct acpi_device *const dev,
-    ACPI_BUFFER *const crs);
 void *acpi_device_get_softc(const struct acpi_device *dev);
-
-/**
- * Maps the current resources (CRS) occupied by the ACPI device to the guest
- * memory space.
- */
-int acpi_device_map_crs(const struct acpi_device *const dev);
 
 int acpi_device_build_table(const struct acpi_device *dev);
 int acpi_device_write_dsdt(const struct acpi_device *dev);
