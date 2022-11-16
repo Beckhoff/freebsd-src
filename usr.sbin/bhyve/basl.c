@@ -443,7 +443,7 @@ basl_table_append_content(struct basl_table *table, void *data, uint32_t len)
 {
 	assert(data != NULL);
 
-	basl_table_append_bytes(table,
+	return basl_table_append_bytes(table,
 	    (void *)(((uintptr_t)(&data)) + sizeof(ACPI_TABLE_HEADER)),
 	    len - sizeof(ACPI_TABLE_HEADER));
 }
