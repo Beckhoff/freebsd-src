@@ -49,8 +49,15 @@ bhyvegc_init(int width, int height, void *fbaddr)
 	struct bhyvegc_image *gc_image;
 
 	gc = calloc(1, sizeof (struct bhyvegc));
+	if (gc == NULL)
+		return (NULL);
 
 	gc_image = calloc(1, sizeof(struct bhyvegc_image));
+	if (gc_image == NULL) {
+		free(gc);
+		return (NULL);
+	}
+
 	gc_image->width = width;
 	gc_image->height = height;
 	if (fbaddr) {
@@ -69,6 +76,9 @@ bhyvegc_init(int width, int height, void *fbaddr)
 void
 bhyvegc_set_fbaddr(struct bhyvegc *gc, void *fbaddr)
 {
+	if (gc == NULL)
+		return;
+
 	gc->raw = 1;
 	if (gc->gc_image->data && gc->gc_image->data != fbaddr)
 		free(gc->gc_image->data);
@@ -79,6 +89,9 @@ void
 bhyvegc_resize(struct bhyvegc *gc, int width, int height)
 {
 	struct bhyvegc_image *gc_image;
+
+	if (gc == NULL)
+		return;
 
 	gc_image = gc->gc_image;
 

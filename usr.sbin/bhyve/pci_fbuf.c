@@ -436,6 +436,10 @@ pci_fbuf_init(struct vmctx *ctx, struct pci_devinst *pi, nvlist_t *nvl)
 	if (sc->vga_enabled)
 		sc->vgasc = vga_init(!sc->vga_full);
 	sc->gc_image = console_get_image();
+	if (sc->gc_image == NULL) {
+		error = -1;
+		goto done;
+	}
 
 	fbuf_sc = sc;
 
