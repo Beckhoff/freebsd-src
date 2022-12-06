@@ -20,6 +20,7 @@
 #include <vmmapi.h>
 
 #include "basl.h"
+#include "qemu_loader.h"
 
 struct basl_table_checksum {
 	STAILQ_ENTRY(basl_table_checksum) chain;
@@ -55,6 +56,8 @@ struct basl_table {
 };
 static STAILQ_HEAD(basl_table_list, basl_table) basl_tables = STAILQ_HEAD_INITIALIZER(
     basl_tables);
+
+static struct qemu_loader *basl_loader;
 
 static __inline uint64_t
 basl_le_dec(void *pp, size_t len)
@@ -148,6 +151,12 @@ basl_finish_install_guest_tables(struct basl_table *const table, uint32_t *const
 		return (EFAULT);
 	}
 
+	/* Cause guest bios to copy the ACPI table into guest memory. */
+	BASL_EXEC(
+	    qemu_fwcfg_add_file(table->fwcfg_name, table->len, table->data));
+	BASL_EXEC(qemu_loader_alloc(basl_loader, table->fwcfg_name,
+	    table->alignment, QEMU_LOADER_ALLOC_HIGH));
+
 	/*
 	 * Install ACPI tables directly in guest memory for use by guests which
 	 * do not boot via EFI. EFI ROMs provide a pointer to the firmware
@@ -185,6 +194,10 @@ basl_finish_patch_checksums(struct basl_table *const table)
 		assert(checksum->off < table->len);
 		assert(checksum->start < table->len);
 		assert(checksum->start + len <= table->len);
+
+		/* Cause guest bios to patch the checksum. */
+		BASL_EXEC(qemu_loader_add_checksum(basl_loader,
+		    table->fwcfg_name, checksum->off, checksum->start, len));
 
 		/*
 		 * Install ACPI tables directly in guest memory for use by
@@ -263,6 +276,11 @@ basl_finish_patch_pointers(struct basl_table *const table)
 			return (EFAULT);
 		}
 
+		/* Cause guest bios to patch the pointer. */
+		BASL_EXEC(
+		    qemu_loader_add_pointer(basl_loader, table->fwcfg_name,
+			src_table->fwcfg_name, pointer->off, pointer->size));
+
 		/*
 		 * Install ACPI tables directly in guest memory for use by
 		 * guests which do not boot via EFI. EFI ROMs provide a pointer
@@ -336,13 +354,15 @@ basl_finish(void)
 		BASL_EXEC(basl_finish_patch_checksums(table));
 	}
 
+	BASL_EXEC(qemu_loader_finish(basl_loader));
+
 	return (0);
 }
 
 int
 basl_init(void)
 {
-	return (0);
+	return (qemu_loader_create(&basl_loader, QEMU_FWCFG_FILE_TABLE_LOADER));
 }
 
 int
