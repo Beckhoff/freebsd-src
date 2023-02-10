@@ -612,7 +612,10 @@ vmexit_inout(struct vmctx *ctx, struct vm_exit *vme, int *pvcpu)
 	in = vme->u.inout.in;
 	out = !in;
 
-        /* Extra-special case of host notifications */
+	// printf("%s @ %8x (%8x) %s @ %16lx\n\r", __func__, port, bytes,
+	//     in ? "READ " : "WRITE", vme->rip);
+
+	/* Extra-special case of host notifications */
         if (out && port == GUEST_NIO_PORT) {
                 error = vmexit_handle_notify(ctx, vme, pvcpu, vme->u.inout.eax);
 		return (error);
@@ -991,6 +994,7 @@ vm_loop(struct vmctx *ctx, int vcpu)
 			    exitcode);
 			exit(4);
 		}
+		//printf("%s @ %8x\n\r", __func__, exitcode);
 
 		rc = (*handler[exitcode])(ctx, &vme, &vcpu);
 
@@ -1524,6 +1528,8 @@ main(int argc, char *argv[])
 
 	error = vm_get_register(ctx, BSP, VM_REG_GUEST_RIP, &rip);
 	assert(error == 0);
+
+	printf("%s BSP @ %16lx\n\r", __func__, rip);
 
 	/*
 	 * build the guest tables, MP etc.
