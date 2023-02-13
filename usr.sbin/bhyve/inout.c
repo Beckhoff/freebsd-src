@@ -69,7 +69,6 @@ static int
 default_inout(struct vmctx *ctx __unused, int in,
     int port __unused, int bytes, uint32_t *eax, void *arg __unused)
 {
-	printf("%s\n\r", __func__);
 	if (in) {
 		switch (bytes) {
 		case 4:
@@ -127,10 +126,8 @@ emulate_inout(struct vmctx *ctx, int vcpu, struct vm_exit *vmexit)
 	handler = inout_handlers[port].handler;
 
 	if (handler == default_inout &&
-	    get_config_bool_default("x86.strictio", false)) {
-		printf("%s: WAIT WHAT?\n\r", __func__);
+	    get_config_bool_default("x86.strictio", false))
 		return (-1);
-	}
 
 	flags = inout_handlers[port].flags;
 	arg = inout_handlers[port].arg;
@@ -266,8 +263,6 @@ init_inout(void)
 int
 register_inout(struct inout_port *iop)
 {
-	printf("%s @ %8x (%4x)\n\r", __func__, iop->port, iop->size);
-
 	int i;
 
 	VERIFY_IOPORT(iop->port, iop->size);
