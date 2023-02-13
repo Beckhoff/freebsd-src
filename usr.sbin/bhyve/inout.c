@@ -267,9 +267,6 @@ register_inout(struct inout_port *iop)
 
 	VERIFY_IOPORT(iop->port, iop->size);
 
-	printf("%s @ [%8x, %8x]\n\r", __func__, iop->port,
-	    iop->port + iop->size - 1);
-
 	/*
 	 * Verify that the new registration is not overwriting an already
 	 * allocated i/o range.

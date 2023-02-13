@@ -38,7 +38,6 @@ __FBSDID("$FreeBSD$");
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <libutil.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -174,8 +173,6 @@ bootrom_alloc(struct vmctx *ctx, size_t len, int prot, int flags,
 		}
 	}
 
-	printf("%s @ [%8lx, %8lx]\n\r", __func__, gpa, gpa + len - 1);
-
 	segoff = gpa - gpa_base;
 	if (vm_mmap_memseg(ctx, gpa, VM_BOOTROM, segoff, len, prot) != 0) {
 		int serrno = errno;
@@ -288,8 +285,6 @@ bootrom_loadrom(struct vmctx *ctx, const nvlist_t *nvl)
 			goto done;
 		}
 	}
-
-	hexdump(ptr, rom_size, NULL, 0);
 
 	if (varfd >= 0) {
 		var.mmap = mmap(NULL, var_size, PROT_READ | PROT_WRITE,

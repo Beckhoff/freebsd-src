@@ -188,9 +188,6 @@ lpc_uart_io_handler(struct vmctx *ctx __unused, int in,
 
 	offset = port - sc->iobase;
 
-	printf("%s @ %8x (%2x) %s: %8x", __func__, port, bytes,
-	    in ? "READ " : "WRITE", *eax);
-
 	switch (bytes) {
 	case 1:
 		if (in)
