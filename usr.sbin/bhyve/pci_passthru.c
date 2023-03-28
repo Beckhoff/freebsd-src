@@ -98,6 +98,11 @@ struct passthru_softc {
 	cfgwrite_handler psc_pcir_whandler[PCI_REGMAX + 1];
 };
 
+static int passthru_cfgread_command(struct passthru_softc *sc,
+    struct pci_devinst *pi, int coff, int bytes, uint32_t *rv);
+static int passthru_cfgwrite_command(struct passthru_softc *sc,
+    struct pci_devinst *pi, int coff, int bytes, uint32_t rv);
+
 static int
 msi_caplen(int msgctrl)
 {
@@ -901,8 +906,13 @@ passthru_init(struct pci_devinst *pi, nvlist_t *nvl)
 	    passthru_cfgread_emulate, passthru_cfgwrite_emulate)) != 0)
 		goto done;
 
-	/* Allow access to the physical command and status register. */
-	if ((error = set_pcir_handler(sc, PCIR_COMMAND, 0x04, NULL, NULL)) != 0)
+	/* Allow access to the physical status register. */
+	if ((error = set_pcir_handler(sc, PCIR_STATUS, 0x02, NULL, NULL)) != 0)
+		goto done;
+
+	/* The command register requires special handling. */
+	if ((error = set_pcir_handler(sc, PCIR_COMMAND, 0x02,
+	    passthru_cfgread_command, passthru_cfgwrite_command)) != 0)
 		goto done;
 
 	error = 0;		/* success */
@@ -941,6 +951,24 @@ msixcap_access(struct passthru_softc *sc, int coff)
 }
 
 static int
+passthru_cfgread_command(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff __unused, int bytes, uint32_t *rv)
+{
+	/*
+	 * Emulate the command register. If a single read reads both the
+	 * command and status registers, read the status register from the
+	 * device's config space.
+	 */
+	if (bytes <= 2)
+		return (-1);
+
+	*rv = read_config(&sc->psc_sel, PCIR_STATUS, 2) << 16 |
+	    pci_get_cfgdata16(pi, PCIR_COMMAND);
+
+	return (0);
+}
+
+static int
 passthru_cfgread_default(struct passthru_softc *sc,
     struct pci_devinst *pi __unused, int coff, int bytes, uint32_t *rv)
 {
@@ -949,19 +977,6 @@ passthru_cfgread_default(struct passthru_softc *sc,
 	 */
 	if (msicap_access(sc, coff) || msixcap_access(sc, coff))
 		return (-1);
-
-	/*
-	 * Emulate the command register.  If a single read reads both the
-	 * command and status registers, read the status register from the
-	 * device's config space.
-	 */
-	if (coff == PCIR_COMMAND) {
-		if (bytes <= 2)
-			return (-1);
-		*rv = read_config(&sc->psc_sel, PCIR_STATUS, 2) << 16 |
-		    pci_get_cfgdata16(pi, PCIR_COMMAND);
-		return (0);
-	}
 
 	/* Everything else just read from the device's config space */
 	*rv = read_config(&sc->psc_sel, coff, bytes);
@@ -991,11 +1006,40 @@ passthru_cfgread(struct pci_devinst *pi, int coff, int bytes, uint32_t *rv)
 }
 
 static int
+passthru_cfgwrite_command(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff, int bytes, uint32_t val)
+{
+	uint16_t cmd_old;
+
+#ifdef LEGACY_SUPPORT
+	/*
+	 * If this device does not support MSI natively then we cannot let
+	 * the guest disable legacy interrupts from the device. It is the
+	 * legacy interrupt that is triggering the virtual MSI to the guest.
+	 */
+	if (sc->psc_msi.emulated && pci_msi_enabled(pi)) {
+		if (coff == PCIR_COMMAND && bytes == 2)
+			val &= ~PCIM_CMD_INTxDIS;
+	}
+#endif
+
+	write_config(&sc->psc_sel, coff, bytes, val);
+
+	cmd_old = pci_get_cfgdata16(pi, PCIR_COMMAND);
+	if (bytes == 1)
+		pci_set_cfgdata8(pi, coff, val);
+	else if (bytes == 2)
+		pci_set_cfgdata16(pi, coff, val);
+	pci_emul_cmd_changed(pi, cmd_old);
+
+	return (0);
+}
+
+static int
 passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff, int bytes, uint32_t val)
 {
 	int error, msix_table_entries, i;
-	uint16_t cmd_old;
 
 	/*
 	 * MSI capability is emulated
@@ -1038,27 +1082,7 @@ passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
 		return (0);
 	}
 
-#ifdef LEGACY_SUPPORT
-	/*
-	 * If this device does not support MSI natively then we cannot let
-	 * the guest disable legacy interrupts from the device. It is the
-	 * legacy interrupt that is triggering the virtual MSI to the guest.
-	 */
-	if (sc->psc_msi.emulated && pci_msi_enabled(pi)) {
-		if (coff == PCIR_COMMAND && bytes == 2)
-			val &= ~PCIM_CMD_INTxDIS;
-	}
-#endif
-
 	write_config(&sc->psc_sel, coff, bytes, val);
-	if (coff == PCIR_COMMAND) {
-		cmd_old = pci_get_cfgdata16(pi, PCIR_COMMAND);
-		if (bytes == 1)
-			pci_set_cfgdata8(pi, PCIR_COMMAND, val);
-		else if (bytes == 2)
-			pci_set_cfgdata16(pi, PCIR_COMMAND, val);
-		pci_emul_cmd_changed(pi, cmd_old);
-	}
 
 	return (0);
 }
