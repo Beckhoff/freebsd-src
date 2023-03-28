@@ -102,6 +102,10 @@ static int passthru_cfgread_command(struct passthru_softc *sc,
     struct pci_devinst *pi, int coff, int bytes, uint32_t *rv);
 static int passthru_cfgwrite_command(struct passthru_softc *sc,
     struct pci_devinst *pi, int coff, int bytes, uint32_t rv);
+static int passthru_cfgwrite_msicap(struct passthru_softc *sc,
+    struct pci_devinst *pi, int coff, int bytes, uint32_t rv);
+static int passthru_cfgwrite_msixcap(struct passthru_softc *sc,
+    struct pci_devinst *pi, int coff, int bytes, uint32_t rv);
 
 static int
 msi_caplen(int msgctrl)
@@ -251,6 +255,13 @@ cfginitmsi(struct passthru_softc *sc)
 					caplen -= 4;
 					capptr += 4;
 				}
+
+				/*
+				 * Add hook for msi emulation.
+				 */
+				set_pcir_handler(sc, ptr, caplen,
+				    passthru_cfgread_emulate,
+				    passthru_cfgwrite_msicap);
 			} else if (cap == PCIY_MSIX) {
 				/*
 				 * Copy the MSI-X capability
@@ -267,6 +278,13 @@ cfginitmsi(struct passthru_softc *sc)
 					capptr += 4;
 					msixcap_ptr += 4;
 				}
+
+				/*
+				 * Add hook for msix emulation.
+				 */
+				set_pcir_handler(sc, ptr, caplen,
+				    passthru_cfgread_emulate,
+				    passthru_cfgwrite_msixcap);
 			}
 			ptr = read_config(&sel, ptr + PCICAP_NEXTPTR, 1);
 		}
@@ -925,32 +943,6 @@ done:
 }
 
 static int
-msicap_access(struct passthru_softc *sc, int coff)
-{
-	int caplen;
-
-	if (sc->psc_msi.capoff == 0)
-		return (0);
-
-	caplen = msi_caplen(sc->psc_msi.msgctrl);
-
-	if (coff >= sc->psc_msi.capoff && coff < sc->psc_msi.capoff + caplen)
-		return (1);
-	else
-		return (0);
-}
-
-static int
-msixcap_access(struct passthru_softc *sc, int coff)
-{
-	if (sc->psc_msix.capoff == 0)
-		return (0);
-
-	return (coff >= sc->psc_msix.capoff &&
-	        coff < sc->psc_msix.capoff + MSIX_CAPLEN);
-}
-
-static int
 passthru_cfgread_command(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff __unused, int bytes, uint32_t *rv)
 {
@@ -972,13 +964,6 @@ static int
 passthru_cfgread_default(struct passthru_softc *sc,
     struct pci_devinst *pi __unused, int coff, int bytes, uint32_t *rv)
 {
-	/*
-	 * MSI capability is emulated.
-	 */
-	if (msicap_access(sc, coff) || msixcap_access(sc, coff))
-		return (-1);
-
-	/* Everything else just read from the device's config space */
 	*rv = read_config(&sc->psc_sel, coff, bytes);
 
 	return (0);
@@ -1039,49 +1024,6 @@ static int
 passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
     int coff, int bytes, uint32_t val)
 {
-	int error, msix_table_entries, i;
-
-	/*
-	 * MSI capability is emulated
-	 */
-	if (msicap_access(sc, coff)) {
-		pci_emul_capwrite(pi, coff, bytes, val, sc->psc_msi.capoff,
-		    PCIY_MSI);
-		error = vm_setup_pptdev_msi(pi->pi_vmctx, sc->psc_sel.pc_bus,
-			sc->psc_sel.pc_dev, sc->psc_sel.pc_func,
-			pi->pi_msi.addr, pi->pi_msi.msg_data,
-			pi->pi_msi.maxmsgnum);
-		if (error != 0)
-			err(1, "vm_setup_pptdev_msi");
-		return (0);
-	}
-
-	if (msixcap_access(sc, coff)) {
-		pci_emul_capwrite(pi, coff, bytes, val, sc->psc_msix.capoff,
-		    PCIY_MSIX);
-		if (pi->pi_msix.enabled) {
-			msix_table_entries = pi->pi_msix.table_count;
-			for (i = 0; i < msix_table_entries; i++) {
-				error = vm_setup_pptdev_msix(pi->pi_vmctx,
-				    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev,
-				    sc->psc_sel.pc_func, i,
-				    pi->pi_msix.table[i].addr,
-				    pi->pi_msix.table[i].msg_data,
-				    pi->pi_msix.table[i].vector_control);
-
-				if (error)
-					err(1, "vm_setup_pptdev_msix");
-			}
-		} else {
-			error = vm_disable_pptdev_msix(pi->pi_vmctx,
-			    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev,
-			    sc->psc_sel.pc_func);
-			if (error)
-				err(1, "vm_disable_pptdev_msix");
-		}
-		return (0);
-	}
-
 	write_config(&sc->psc_sel, coff, bytes, val);
 
 	return (0);
@@ -1093,6 +1035,52 @@ passthru_cfgwrite_emulate(struct passthru_softc *sc __unused,
     uint32_t val __unused)
 {
 	return (-1);
+}
+
+static int
+passthru_cfgwrite_msicap(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff, int bytes, uint32_t val)
+{
+	int error;
+
+	pci_emul_capwrite(pi, coff, bytes, val, sc->psc_msi.capoff, PCIY_MSI);
+
+	error = vm_setup_pptdev_msi(pi->pi_vmctx, sc->psc_sel.pc_bus,
+	    sc->psc_sel.pc_dev, sc->psc_sel.pc_func, pi->pi_msi.addr,
+	    pi->pi_msi.msg_data, pi->pi_msi.maxmsgnum);
+	if (error != 0)
+		err(1, "vm_setup_pptdev_msi");
+
+	return (0);
+}
+
+static int
+passthru_cfgwrite_msixcap(struct passthru_softc *sc, struct pci_devinst *pi,
+    int coff, int bytes, uint32_t val)
+{
+	int error, msix_table_entries, i;
+
+	pci_emul_capwrite(pi, coff, bytes, val, sc->psc_msix.capoff, PCIY_MSIX);
+
+	if (pi->pi_msix.enabled) {
+		msix_table_entries = pi->pi_msix.table_count;
+		for (i = 0; i < msix_table_entries; i++) {
+			error = vm_setup_pptdev_msix(pi->pi_vmctx,
+			    sc->psc_sel.pc_bus, sc->psc_sel.pc_dev,
+			    sc->psc_sel.pc_func, i, pi->pi_msix.table[i].addr,
+			    pi->pi_msix.table[i].msg_data,
+			    pi->pi_msix.table[i].vector_control);
+			if (error)
+				err(1, "vm_setup_pptdev_msix");
+		}
+	} else {
+		error = vm_disable_pptdev_msix(pi->pi_vmctx, sc->psc_sel.pc_bus,
+		    sc->psc_sel.pc_dev, sc->psc_sel.pc_func);
+		if (error)
+			err(1, "vm_disable_pptdev_msix");
+	}
+
+	return (0);
 }
 
 static int
