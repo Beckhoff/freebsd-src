@@ -960,15 +960,6 @@ passthru_cfgread_command(struct passthru_softc *sc, struct pci_devinst *pi,
 	return (0);
 }
 
-static int
-passthru_cfgread_default(struct passthru_softc *sc,
-    struct pci_devinst *pi __unused, int coff, int bytes, uint32_t *rv)
-{
-	*rv = read_config(&sc->psc_sel, coff, bytes);
-
-	return (0);
-}
-
 int
 passthru_cfgread_emulate(struct passthru_softc *sc __unused,
     struct pci_devinst *pi __unused, int coff __unused, int bytes __unused,
@@ -987,7 +978,9 @@ passthru_cfgread(struct pci_devinst *pi, int coff, int bytes, uint32_t *rv)
 	if (sc->psc_pcir_rhandler[coff] != NULL)
 		return (sc->psc_pcir_rhandler[coff](sc, pi, coff, bytes, rv));
 
-	return (passthru_cfgread_default(sc, pi, coff, bytes, rv));
+	*rv = read_config(&sc->psc_sel, coff, bytes);
+
+	return (0);
 }
 
 static int
@@ -1016,15 +1009,6 @@ passthru_cfgwrite_command(struct passthru_softc *sc, struct pci_devinst *pi,
 	else if (bytes == 2)
 		pci_set_cfgdata16(pi, coff, val);
 	pci_emul_cmd_changed(pi, cmd_old);
-
-	return (0);
-}
-
-static int
-passthru_cfgwrite_default(struct passthru_softc *sc, struct pci_devinst *pi,
-    int coff, int bytes, uint32_t val)
-{
-	write_config(&sc->psc_sel, coff, bytes, val);
 
 	return (0);
 }
@@ -1093,7 +1077,9 @@ passthru_cfgwrite(struct pci_devinst *pi, int coff, int bytes, uint32_t val)
 	if (sc->psc_pcir_whandler[coff] != NULL)
 		return (sc->psc_pcir_whandler[coff](sc, pi, coff, bytes, val));
 
-	return (passthru_cfgwrite_default(sc, pi, coff, bytes, val));
+	write_config(&sc->psc_sel, coff, bytes, val);
+
+	return (0);
 }
 
 static void
