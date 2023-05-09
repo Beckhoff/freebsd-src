@@ -197,7 +197,9 @@ e820_add_entry(const uint64_t base, const uint64_t end,
 		return (0);
 	}
 
-	assert(element != NULL);
+	if (element == NULL) {
+		return (ENOMEM);
+	}
 	/* Non system memory should be allocated inside system memory. */
 	assert(element->type == E820_TYPE_MEMORY);
 	/* New element should fit into existing system memory element. */
