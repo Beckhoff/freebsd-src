@@ -9,6 +9,7 @@
 
 #include <vmmapi.h>
 
+#include "config.h"
 #include "pci_emul.h"
 
 struct passthru_mmio_mapping {
@@ -37,3 +38,5 @@ struct passthru_mmio_mapping *passthru_get_mmio(struct passthru_softc *sc,
 struct pcisel *passthru_get_sel(struct passthru_softc *sc);
 int set_pcir_handler(struct passthru_softc *sc, int reg, int len,
     cfgread_handler rhandler, cfgwrite_handler whandler);
+int gvt_d_init(struct pci_devinst *const pi, nvlist_t *const nvl);
+void gvt_d_deinit(struct pci_devinst *const pi);
