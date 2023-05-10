@@ -67,11 +67,14 @@ __FBSDID("$FreeBSD$");
 #include "config.h"
 #include "debug.h"
 #include "mem.h"
+#include "pci_gvt-d.h"
 #include "pci_passthru.h"
 
 #ifndef _PATH_DEVPCI
 #define	_PATH_DEVPCI	"/dev/pci"
 #endif
+
+#define PCI_VENDOR_INTEL 0x8086
 
 #define	LEGACY_SUPPORT	1
 
@@ -852,6 +855,40 @@ passthru_lookup_pptdev(const char *name, int *bus, int *slot, int *func)
 }
 
 static int
+passthru_init_dev(struct pci_devinst *const pi, nvlist_t *const nvl)
+{
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	const uint16_t vendor = read_config(&sc->psc_sel, PCIR_VENDOR, 0x02);
+	const uint8_t class = read_config(&sc->psc_sel, PCIR_CLASS, 0x01);
+
+	/* Currently only display devices have a special init. */
+	if (class != PCIC_DISPLAY)
+		return (0);
+
+	if (vendor == PCI_VENDOR_INTEL)
+		return (gvt_d_init(pi, nvl));
+
+	return (0);
+}
+
+static void
+passthru_deinit_dev(struct pci_devinst *const pi)
+{
+	struct passthru_softc *const sc = pi->pi_arg;
+
+	const uint16_t vendor = read_config(&sc->psc_sel, PCIR_VENDOR, 0x02);
+	const uint8_t class = read_config(&sc->psc_sel, PCIR_CLASS, 0x01);
+
+	/* Currently only display devices have a special deinit. */
+	if (class != PCIC_DISPLAY)
+		return;
+
+	if (vendor == PCI_VENDOR_INTEL)
+		gvt_d_deinit(pi);
+}
+
+static int
 passthru_init(struct pci_devinst *pi, nvlist_t *nvl)
 {
 	int bus, slot, func, error, memflags;
@@ -919,9 +956,13 @@ passthru_init(struct pci_devinst *pi, nvlist_t *nvl)
 	if ((error = set_pcir_handler(sc, PCIR_COMMAND, 0x04, NULL, NULL)) != 0)
 		goto done;
 
+	if ((error = passthru_init_dev(pi, nvl)) != 0)
+		goto done;
+
 	error = 0;		/* success */
 done:
 	if (error) {
+		passthru_deinit_dev(pi);
 		free(sc);
 		vm_unassign_pptdev(pi->pi_vmctx, bus, slot, func);
 	}
