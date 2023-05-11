@@ -19,6 +19,8 @@
 #define MB (1024 * KB)
 #define GB (1024 * MB)
 
+#define PCIR_BDSM 0x5C /* Base of Data Stolen Memory register */
+
 #define PCIM_BDSM_GSM_ALIGNMENT \
 	0x00100000 /* Graphics Stolen Memory is 1 MB aligned */
 
@@ -72,6 +74,7 @@ gvt_d_setup_gsm(struct pci_devinst *const pi)
 	struct passthru_softc *sc;
 	struct passthru_mmio_mapping *gsm;
 	size_t sysctl_len;
+	uint32_t bdsm;
 	int error;
 
 	sc = pi->pi_arg;
@@ -132,7 +135,12 @@ gvt_d_setup_gsm(struct pci_devinst *const pi)
 		    "Warning: Unable to reuse host address of Graphics Stolen Memory. GPU passthrough might not work properly.");
 	}
 
-	return (0);
+	bdsm = read_config(passthru_get_sel(sc), PCIR_BDSM, 4);
+	pci_set_cfgdata32(pi, PCIR_BDSM,
+	    gsm->gpa | (bdsm & (PCIM_BDSM_GSM_ALIGNMENT - 1)));
+
+	return (set_pcir_handler(sc, PCIR_BDSM, 4, passthru_cfgread_emulate,
+	    passthru_cfgwrite_emulate));
 }
 
 int
