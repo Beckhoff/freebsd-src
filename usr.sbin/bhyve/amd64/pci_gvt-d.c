@@ -32,6 +32,7 @@
 #define PCI_VENDOR_INTEL 0x8086
 
 #define PCIR_BDSM 0x5C	   /* Base of Data Stolen Memory register */
+#define PCIR_BDSM_GEN11 0xC0
 #define PCIR_ASLS_CTL 0xFC /* Opregion start address register */
 
 #define PCIM_BDSM_GSM_ALIGNMENT \
@@ -109,7 +110,7 @@ gvt_d_setup_gsm(struct pci_devinst *const pi)
 	struct passthru_softc *sc;
 	struct passthru_mmio_mapping *gsm;
 	size_t sysctl_len;
-	uint32_t bdsm;
+	uint64_t bdsm, gen = 0;
 	int error;
 
 	sc = pi->pi_arg;
@@ -170,12 +171,31 @@ gvt_d_setup_gsm(struct pci_devinst *const pi)
 		    "Warning: Unable to reuse host address of Graphics Stolen Memory. GPU passthrough might not work properly.");
 	}
 
-	bdsm = pci_host_read_config(passthru_get_sel(sc), PCIR_BDSM, 4);
-	pci_set_cfgdata32(pi, PCIR_BDSM,
-	    gsm->gpa | (bdsm & (PCIM_BDSM_GSM_ALIGNMENT - 1)));
+	sysctl_len = sizeof(gen);
+	error = sysctlbyname("hw.intel_graphics_gen", &gen, &sysctl_len, NULL,
+	    0);
+	if (error) {
+		warn("%s: Unable to get generation of intel graphics device",
+		    __func__);
+		return (-1);
+	}
 
-	return (set_pcir_handler(sc, PCIR_BDSM, 4, passthru_cfgread_emulate,
-	    passthru_cfgwrite_emulate));
+	if (gen < 11) {
+		bdsm = pci_host_read_config(passthru_get_sel(sc), PCIR_BDSM, 4);
+		pci_set_cfgdata32(pi, PCIR_BDSM,
+		    gsm->gpa | (bdsm & (PCIM_BDSM_GSM_ALIGNMENT - 1)));
+		error = set_pcir_handler(sc, PCIR_BDSM, 4,
+		    passthru_cfgread_emulate, passthru_cfgwrite_emulate);
+	} else {
+		bdsm = pci_host_read_config(passthru_get_sel(sc), PCIR_BDSM_GEN11, 8);
+		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11,
+		    gsm->gpa | (bdsm & (PCIM_BDSM_GSM_ALIGNMENT - 1)));
+		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + 4, gsm->gpa >> 32);
+		error = set_pcir_handler(sc, PCIR_BDSM_GEN11, 8,
+		    passthru_cfgread_emulate, passthru_cfgwrite_emulate);
+	}
+
+	return (error);
 }
 
 static int
