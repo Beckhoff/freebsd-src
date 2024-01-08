@@ -78,6 +78,14 @@ static int pcifd = -1;
 
 SET_DECLARE(passthru_dev_set, struct passthru_dev);
 
+struct passthru_bar_handler {
+	TAILQ_ENTRY(passthru_bar_handler) chain;
+	vm_offset_t off;
+	vm_size_t len;
+	passthru_read_handler read;
+	passthru_write_handler write;
+};
+
 struct passthru_softc {
 	struct pci_devinst *psc_pi;
 	/* ROM is handled like a BAR */
@@ -95,6 +103,9 @@ struct passthru_softc {
 	struct passthru_mmio_mapping psc_mmio_map[PASSTHRU_MMIO_MAX];
 	cfgread_handler psc_pcir_rhandler[PCI_REGMAX + 1];
 	cfgwrite_handler psc_pcir_whandler[PCI_REGMAX + 1];
+
+	TAILQ_HEAD(,
+	    passthru_bar_handler) psc_bar_handler[PCI_BARMAX_WITH_ROM + 1];
 };
 
 static int
@@ -901,6 +912,9 @@ passthru_init(struct pci_devinst *pi, nvlist_t *nvl)
 	pi->pi_arg = sc;
 	sc->psc_pi = pi;
 
+	for (uint8_t i = 0; i < PCI_BARMAX_WITH_ROM + 1; ++i)
+		TAILQ_INIT(&sc->psc_bar_handler[i]);
+
 	/* initialize config space */
 	if ((error = cfginit(pi, bus, slot, func)) != 0)
 		goto done;
@@ -1118,6 +1132,7 @@ passthru_write(struct pci_devinst *pi, int baridx, uint64_t offset, int size,
     uint64_t value)
 {
 	struct passthru_softc *sc;
+	struct passthru_bar_handler *handler;
 	struct pci_bar_ioreq pio;
 
 	sc = pi->pi_arg;
@@ -1125,9 +1140,16 @@ passthru_write(struct pci_devinst *pi, int baridx, uint64_t offset, int size,
 	if (baridx == pci_msix_table_bar(pi)) {
 		msix_table_write(sc, offset, size, value);
 	} else {
-		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
 		assert(size == 1 || size == 2 || size == 4);
-		assert(offset <= UINT32_MAX && offset + size <= UINT32_MAX);
+
+		TAILQ_FOREACH(handler, &sc->psc_bar_handler[baridx], chain) {
+			if (handler->off <= offset &&
+			    offset + size <= handler->off + handler->len) {
+				handler->write(pi, offset - handler->off, size,
+				    value);
+				return;
+			}
+		}
 
 		bzero(&pio, sizeof(pio));
 		pio.pbi_sel = sc->psc_sel;
@@ -1145,6 +1167,7 @@ static uint64_t
 passthru_read(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
 {
 	struct passthru_softc *sc;
+	struct passthru_bar_handler *handler;
 	struct pci_bar_ioreq pio;
 	uint64_t val;
 
@@ -1153,9 +1176,15 @@ passthru_read(struct pci_devinst *pi, int baridx, uint64_t offset, int size)
 	if (baridx == pci_msix_table_bar(pi)) {
 		val = msix_table_read(sc, offset, size);
 	} else {
-		assert(pi->pi_bar[baridx].type == PCIBAR_IO);
 		assert(size == 1 || size == 2 || size == 4);
-		assert(offset <= UINT32_MAX && offset + size <= UINT32_MAX);
+
+		TAILQ_FOREACH(handler, &sc->psc_bar_handler[baridx], chain) {
+			if (handler->off <= offset &&
+			    offset + size <= handler->off + handler->len) {
+				handler->read(pi, offset - handler->off, size, &val);
+				return (val);
+			}
+		}
 
 		bzero(&pio, sizeof(pio));
 		pio.pbi_sel = sc->psc_sel;
