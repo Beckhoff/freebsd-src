@@ -83,6 +83,58 @@ gvt_d_alloc_mmio_memory(const vm_paddr_t host_address, const vm_paddr_t length,
 	    e820_alloc(4 * GB, length, alignment, type, E820_ALLOCATE_HIGHEST));
 }
 
+static int
+gvt_d_dsmbase_read(struct pci_devinst *pi, uint64_t off, uint64_t size, uint64_t *rv)
+{
+	assert((off & (size - 1)) == 0);
+
+	switch (size) {
+		case 1:
+			*rv = pci_get_cfgdata8(pi, PCIR_BDSM_GEN11 + off);
+			break;
+		case 2:
+			*rv = pci_get_cfgdata16(pi, PCIR_BDSM_GEN11 + off);
+			break;
+		case 4:
+			*rv = pci_get_cfgdata32(pi, PCIR_BDSM_GEN11 + off);
+			break;
+		case 8:
+			*rv = pci_get_cfgdata32(pi, PCIR_BDSM_GEN11 + off);
+			*rv |= (((uint64_t)pci_get_cfgdata32(pi, off)) << 32);
+			break;
+		default:
+			return (-1);
+	}
+
+	return (0);
+}
+
+static int
+gvt_d_dsmbase_write(struct pci_devinst *pi, uint64_t off, uint64_t size, uint64_t val)
+{
+	assert((off & (size - 1)) == 0);
+
+	switch (size) {
+		case 1:
+			pci_set_cfgdata8(pi, PCIR_BDSM_GEN11 + off, val);
+			break;
+		case 2:
+			pci_set_cfgdata16(pi, PCIR_BDSM_GEN11 + off, val);
+			break;
+		case 4:
+			pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off, val);
+			break;
+		case 8:
+			pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off, val);
+			pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off, val >> 32);
+			break;
+		default:
+			return (-1);
+	}
+
+	return (0);
+}
+
 /*
  * Note that the graphics stolen memory is somehow confusing. On the one hand
  * the Intel Open Source HD Graphics Programmers' Reference Manual states that
@@ -187,12 +239,17 @@ gvt_d_setup_gsm(struct pci_devinst *const pi)
 		error = set_pcir_handler(sc, PCIR_BDSM, 4,
 		    passthru_cfgread_emulate, passthru_cfgwrite_emulate);
 	} else {
+		/* Protect the BDSM register in PCI config space. */
 		bdsm = pci_host_read_config(passthru_get_sel(sc), PCIR_BDSM_GEN11, 8);
 		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11,
 		    gsm->gpa | (bdsm & (PCIM_BDSM_GSM_ALIGNMENT - 1)));
 		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + 4, gsm->gpa >> 32);
 		error = set_pcir_handler(sc, PCIR_BDSM_GEN11, 8,
 		    passthru_cfgread_emulate, passthru_cfgwrite_emulate);
+
+		/* Protect the BDSM register in MMIO space. */
+		passthru_set_bar_handler(sc, 0, 0x1080C0, sizeof(uint64_t),
+		    gvt_d_dsmbase_read, gvt_d_dsmbase_write);
 	}
 
 	return (error);
