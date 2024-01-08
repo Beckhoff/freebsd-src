@@ -44,6 +44,58 @@
 #define GVT_D_MAP_VBT 2
 
 static int
+gvt_d_dsmbase_read(struct pci_devinst *pi, uint64_t off, uint64_t size, uint64_t *rv)
+{
+	assert((off & (size - 1)) == 0);
+
+	switch (size) {
+	case 1:
+		*rv = pci_get_cfgdata8(pi, PCIR_BDSM_GEN11 + off);
+		break;
+	case 2:
+		*rv = pci_get_cfgdata16(pi, PCIR_BDSM_GEN11 + off);
+		break;
+	case 4:
+		*rv = pci_get_cfgdata32(pi, PCIR_BDSM_GEN11 + off);
+		break;
+	case 8:
+		*rv = pci_get_cfgdata32(pi, PCIR_BDSM_GEN11 + off);
+		*rv |= (((uint64_t)pci_get_cfgdata32(pi, PCIR_BDSM_GEN11 + off + 4)) << 32);
+		break;
+	default:
+		return (-1);
+	}
+
+	return (0);
+}
+
+static int
+gvt_d_dsmbase_write(struct pci_devinst *pi, uint64_t off, uint64_t size, uint64_t val)
+{
+	assert((off & (size - 1)) == 0);
+
+	switch (size) {
+	case 1:
+		pci_set_cfgdata8(pi, PCIR_BDSM_GEN11 + off, val);
+		break;
+	case 2:
+		pci_set_cfgdata16(pi, PCIR_BDSM_GEN11 + off, val);
+		break;
+	case 4:
+		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off, val);
+		break;
+	case 8:
+		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off, val);
+		pci_set_cfgdata32(pi, PCIR_BDSM_GEN11 + off + 4, val >> 32);
+		break;
+	default:
+		return (-1);
+	}
+
+	return (0);
+}
+
+static int
 set_bdsm_gen3(struct pci_devinst *const pi, vm_paddr_t bdsm_gpa)
 {
 	struct passthru_softc *sc = pi->pi_arg;
@@ -82,6 +134,13 @@ set_bdsm_gen11(struct pci_devinst *const pi, vm_paddr_t bdsm_gpa)
 	    passthru_cfgwrite_emulate);
 	if (error) {
 		warnx("%s: Failed to setup handler for BDSM register!\n", __func__);
+		return (error);
+	}
+
+	/* Protect the BDSM register in MMIO space. */
+	error = passthru_set_bar_handler(sc, 0, 0x1080C0, sizeof(uint64_t), gvt_d_dsmbase_read, gvt_d_dsmbase_write);
+	if (error) {
+		warnx("%s: Failed to setup handler for BDSM mirror!\n", __func__);
 		return (error);
 	}
 
