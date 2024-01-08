@@ -706,6 +706,45 @@ set_pcir_handler(struct passthru_softc *sc, int reg, int len,
 	return (0);
 }
 
+int
+passthru_set_bar_handler(struct passthru_softc *sc, int baridx, vm_offset_t off,
+    vm_size_t len, passthru_read_handler rhandler,
+    passthru_write_handler whandler)
+{
+	struct passthru_bar_handler *handler_new;
+	struct passthru_bar_handler *handler;
+
+	assert(sc->psc_bar[baridx].type == PCIBAR_IO ||
+	    sc->psc_bar[baridx].type == PCIBAR_MEM32 ||
+	    sc->psc_bar[baridx].type == PCIBAR_MEM64);
+	assert(sc->psc_bar[baridx].size > off + len);
+	assert(off < off + len);
+
+	handler_new = malloc(sizeof(struct passthru_bar_handler));
+	if (handler_new == NULL) {
+		return (ENOMEM);
+	}
+
+	handler_new->off = off;
+	handler_new->len = len;
+	handler_new->read = rhandler;
+	handler_new->write = whandler;
+
+	TAILQ_FOREACH (handler, &sc->psc_bar_handler[baridx], chain) {
+		if (handler->off < handler_new->off) {
+			assert(handler->off + handler->len < handler_new->off);
+			continue;
+		}
+		assert(handler->off > handler_new->off + handler_new->len);
+		TAILQ_INSERT_BEFORE(handler, handler_new, chain);
+		return (0);
+	}
+
+	TAILQ_INSERT_TAIL(&sc->psc_bar_handler[baridx], handler_new, chain);
+
+	return (0);
+}
+
 static int
 passthru_legacy_config(nvlist_t *nvl, const char *opts)
 {
