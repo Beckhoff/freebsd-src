@@ -1253,27 +1253,64 @@ passthru_msix_addr(struct pci_devinst *pi, int baridx, int enabled,
 	}
 }
 
+static int
+passthru_mmio_map(struct pci_devinst *pi, int baridx, int enabled,
+    uint64_t address, uint64_t off, uint64_t len)
+{
+	struct passthru_softc *sc = pi->pi_arg;
+
+	if (!enabled) {
+		if (vm_unmap_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
+		    sc->psc_sel.pc_dev, sc->psc_sel.pc_func, address + off,
+			len) != 0) {
+			warnx("pci_passthru: unmap_pptdev_mmio failed");
+			return (-1);
+		}
+	} else {
+		if (vm_map_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
+		    sc->psc_sel.pc_dev, sc->psc_sel.pc_func, address + off,
+		    len, sc->psc_bar[baridx].addr + off) != 0) {
+			warnx("pci_passthru: map_pptdev_mmio failed");
+			return (-1);
+		}
+	}
+
+	return (0);
+}
+
 static void
 passthru_mmio_addr(struct pci_devinst *pi, int baridx, int enabled,
     uint64_t address)
 {
 	struct passthru_softc *sc;
+	struct passthru_bar_handler *handler;
+	uint64_t off;
 
 	sc = pi->pi_arg;
-	if (!enabled) {
-		if (vm_unmap_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
-					 sc->psc_sel.pc_dev,
-					 sc->psc_sel.pc_func, address,
-					 sc->psc_bar[baridx].size) != 0)
-			warnx("pci_passthru: unmap_pptdev_mmio failed");
-	} else {
-		if (vm_map_pptdev_mmio(pi->pi_vmctx, sc->psc_sel.pc_bus,
-				       sc->psc_sel.pc_dev,
-				       sc->psc_sel.pc_func, address,
-				       sc->psc_bar[baridx].size,
-				       sc->psc_bar[baridx].addr) != 0)
-			warnx("pci_passthru: map_pptdev_mmio failed");
+
+	off = 0;
+
+	/* The queue is sorted by offset in ascending order. */
+	TAILQ_FOREACH(handler, &sc->psc_bar_handler[baridx], chain) {
+		uint64_t handler_off = rounddown2(handler->off, PAGE_SIZE);
+		uint64_t handler_end = roundup2(handler->off + handler->len,
+		    PAGE_SIZE);
+
+		/*
+		 * When two handler point to the same page, handler_off can be
+		 * lower than off. That's fine because we have nothing to do in
+		 * that case.
+		 */
+		if (handler_off > off) {
+			passthru_mmio_map(pi, baridx, enabled, address, off,
+			    handler_off - off);
+		}
+
+		off = handler_end;
 	}
+
+	passthru_mmio_map(pi, baridx, enabled, address, off,
+	    sc->psc_bar[baridx].size - off);
 }
 
 static void
