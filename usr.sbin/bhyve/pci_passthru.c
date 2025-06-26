@@ -1017,6 +1017,8 @@ passthru_init(struct pci_devinst *pi, nvlist_t *nvl)
 	if ((error = set_pcir_handler(sc, PCIR_COMMAND, 0x04, NULL, NULL)) != 0)
 		goto done;
 
+	pci_set_cfgdata8(pi, 0x3D, 1);
+
 	SET_FOREACH(devpp, passthru_dev_set) {
 		devp = *devpp;
 		assert(devp->probe != NULL);
