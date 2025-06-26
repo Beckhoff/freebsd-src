@@ -19,7 +19,7 @@ pci_config_mirror_read(struct pci_devinst *const pi, uint64_t off, uint64_t size
 {
 	assert(size == 1 || size == 2 || size == 4);
 	passthru_read_host(pi, 0, off, size);
-	return (passthru_cfgread_default(pi->pi_arg, pi, off, size, (uint32_t *)rv);
+	return (passthru_cfgread_default(pi->pi_arg, pi, off, size, (uint32_t *)rv));
 }
 
 static int
