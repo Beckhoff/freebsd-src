@@ -2286,11 +2286,13 @@ pci_cfgrw(int in, int bus, int slot, int func, int coff, int bytes,
 		return;
 	}
 
+	pe = pi->pi_d;
+
 	/*
 	 * Ignore all writes beyond the standard config space and return all
 	 * ones on reads.
 	 */
-	if (coff >= PCI_REGMAX + 1) {
+	if (coff >= PCI_REGMAX + 1 && strcmp(pe->pe_emu, "passthru")) {
 		if (in) {
 			*valp = 0xffffffff;
 			/*
@@ -2304,8 +2306,6 @@ pci_cfgrw(int in, int bus, int slot, int func, int coff, int bytes,
 		}
 		return;
 	}
-
-	pe = pi->pi_d;
 
 	/*
 	 * Config read

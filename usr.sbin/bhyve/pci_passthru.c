@@ -101,8 +101,8 @@ struct passthru_softc {
 	struct pcisel psc_sel;
 
 	struct passthru_mmio_mapping psc_mmio_map[PASSTHRU_MMIO_MAX];
-	cfgread_handler psc_pcir_rhandler[PCI_REGMAX + 1];
-	cfgwrite_handler psc_pcir_whandler[PCI_REGMAX + 1];
+	cfgread_handler psc_pcir_rhandler[PCIE_REGMAX + 1];
+	cfgwrite_handler psc_pcir_whandler[PCIE_REGMAX + 1];
 
 	TAILQ_HEAD(,
 	    passthru_bar_handler) psc_bar_handler[PCI_BARMAX_WITH_ROM + 1];
@@ -738,7 +738,7 @@ int
 set_pcir_handler(struct passthru_softc *sc, int reg, int len,
     cfgread_handler rhandler, cfgwrite_handler whandler)
 {
-	if (reg > PCI_REGMAX || reg + len > PCI_REGMAX + 1)
+	if (reg > PCIE_REGMAX || reg + len > PCIE_REGMAX + 1)
 		return (-1);
 
 	for (int i = reg; i < reg + len; ++i) {
